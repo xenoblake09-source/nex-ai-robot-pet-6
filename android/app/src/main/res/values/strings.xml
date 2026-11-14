@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">NEX</string>
+    <string name="status_online">ONLINE</string>
+    <string name="status_offline">OFFLINE</string>
+    <string name="default_nex6_backend_url">https://nex-ai-robot-pet-6-backend.onrender.com</string>
+    <string name="shortcut_setup_short">Backend Setup</string>
+    <string name="shortcut_setup_long">Backend HTTPS URL &amp; Privacy Setup</string>
+</resources>

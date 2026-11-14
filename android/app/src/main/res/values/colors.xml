@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="pure_black">#000000</color>
+    <color name="nex_cyan">#00E5FF</color>
+    <color name="nex_cyan_dim">#004D61</color>
+    <color name="nex_surface">#0D131A</color>
+    <color name="nex_surface_card">#141E28</color>
+    <color name="nex_border">#1E3346</color>
+    <color name="nex_online_green">#00E676</color>
+    <color name="nex_offline_red">#FF5252</color>
+    <color name="nex_text_primary">#ECF8FF</color>
+    <color name="nex_text_secondary">#8FB3C9</color>
+    <color name="nex_accent_pink">#FF4081</color>
+    <color name="nex_accent_gold">#FFD740</color>
+</resources>

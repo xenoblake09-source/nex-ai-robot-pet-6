@@ -1,0 +1,233 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#060B11"
+    android:orientation="vertical"
+    android:padding="14dp">
+
+    <!-- Top Bar -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingBottom="8dp">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="NEX 6.0 — External Backend, Privacy &amp; Custom Eye Setup"
+            android:textColor="#00E5FF"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/btnCloseSetup"
+            android:layout_width="wrap_content"
+            android:layout_height="38dp"
+            android:backgroundTint="#1E3346"
+            android:text="Save &amp; Launch NEX"
+            android:textAllCaps="false"
+            android:textColor="#FFFFFF"
+            android:textSize="12sp" />
+    </LinearLayout>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:fillViewport="true">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <!-- HTTPS Backend URL Card -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_cyber_card"
+                android:orientation="vertical"
+                android:padding="12dp">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="1. Render HTTPS Backend URL (No Gemini API Key Stored on Phone)"
+                    android:textColor="#ECF8FF"
+                    android:textSize="13sp"
+                    android:textStyle="bold" />
+
+                <EditText
+                    android:id="@+id/etSetupBackendUrl"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:backgroundTint="#00E5FF"
+                    android:hint="https://nex-ai-robot-pet-6-backend.onrender.com"
+                    android:inputType="textUri"
+                    android:singleLine="true"
+                    android:textColor="#FFFFFF"
+                    android:textColorHint="#66ECF8FF"
+                    android:textSize="13sp" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:orientation="horizontal">
+
+                    <Button
+                        android:id="@+id/btnVerifyHealth"
+                        android:layout_width="wrap_content"
+                        android:layout_height="38dp"
+                        android:backgroundTint="#00838F"
+                        android:text="Verify /health Connection"
+                        android:textAllCaps="false"
+                        android:textColor="#FFFFFF"
+                        android:textSize="12sp" />
+
+                    <Button
+                        android:id="@+id/btnResetDefaultUrl"
+                        android:layout_width="wrap_content"
+                        android:layout_height="38dp"
+                        android:layout_marginStart="8dp"
+                        android:backgroundTint="#263849"
+                        android:text="Use Default URL"
+                        android:textAllCaps="false"
+                        android:textColor="#ECF8FF"
+                        android:textSize="12sp" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/tvSetupHealthStatus"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:text="Status: Ready to verify HTTPS backend."
+                    android:textColor="#B0ECF8FF"
+                    android:textSize="12sp" />
+            </LinearLayout>
+
+            <!-- Memory & Privacy Card -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:background="@drawable/bg_cyber_card"
+                android:orientation="vertical"
+                android:padding="12dp">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="2. Memory, Voice Standby &amp; Privacy Controls"
+                    android:textColor="#ECF8FF"
+                    android:textSize="13sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/tvStoredMemorySummary"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:textColor="#80D8FF"
+                    android:textSize="12sp" />
+
+                <CheckBox
+                    android:id="@+id/chkSetupAllowMemory"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:buttonTint="#00E5FF"
+                    android:text="Allow NEX to remember preferred user name &amp; recent conversation context"
+                    android:textColor="#ECF8FF"
+                    android:textSize="12sp" />
+
+                <CheckBox
+                    android:id="@+id/chkSetupWakeStandby"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:buttonTint="#00E5FF"
+                    android:text="Enable 'Hey NEX' foreground wake-phrase standby (active while NEX screen is open)"
+                    android:textColor="#ECF8FF"
+                    android:textSize="12sp" />
+
+                <CheckBox
+                    android:id="@+id/chkSetupAutonomousIdle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:buttonTint="#00E5FF"
+                    android:text="Allow gentle idle robot eye expressions when quiet"
+                    android:textColor="#ECF8FF"
+                    android:textSize="12sp" />
+
+                <Button
+                    android:id="@+id/btnWipeUserData"
+                    android:layout_width="wrap_content"
+                    android:layout_height="38dp"
+                    android:layout_marginTop="4dp"
+                    android:backgroundTint="#8E2424"
+                    android:text="Clear Stored Name, Conversation History &amp; Scores"
+                    android:textAllCaps="false"
+                    android:textColor="#FFFFFF"
+                    android:textSize="12sp" />
+            </LinearLayout>
+
+            <!-- 17th Expression: Custom Eye Style Card -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:background="@drawable/bg_cyber_card"
+                android:orientation="vertical"
+                android:padding="12dp">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="3. Custom Eye Style Preset (Used When You Say 'Hey NEX, Custom Eyes')"
+                    android:textColor="#ECF8FF"
+                    android:textSize="13sp"
+                    android:textStyle="bold" />
+
+                <LinearLayout
+                    android:id="@+id/customColorRow"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:orientation="horizontal" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:text="Eye Openness Scale:"
+                    android:textColor="#B0ECF8FF"
+                    android:textSize="12sp" />
+
+                <SeekBar
+                    android:id="@+id/seekCustomOpenness"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:max="80" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="Upper Brow Slant (Gentle ← Neutral → Fierce):"
+                    android:textColor="#B0ECF8FF"
+                    android:textSize="12sp" />
+
+                <SeekBar
+                    android:id="@+id/seekCustomSlant"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:max="120" />
+            </LinearLayout>
+
+        </LinearLayout>
+    </ScrollView>
+</LinearLayout>

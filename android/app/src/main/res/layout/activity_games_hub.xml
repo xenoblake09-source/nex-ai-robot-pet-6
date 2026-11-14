@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#000000"
+    android:keepScreenOn="true"
+    android:orientation="vertical"
+    android:padding="12dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@drawable/bg_cyber_card"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:padding="8dp">
+
+        <Button
+            android:id="@+id/btnBackFromGamesHub"
+            android:layout_width="wrap_content"
+            android:layout_height="38dp"
+            android:backgroundTint="#1E3346"
+            android:text="← Face"
+            android:textAllCaps="false"
+            android:textColor="@color/nex_text_primary"
+            android:textSize="12sp" />
+
+        <com.nex.robotpet.v6.ui.RobotEyesView
+            android:id="@+id/gamesHubEyes"
+            android:layout_width="86dp"
+            android:layout_height="40dp"
+            android:layout_marginStart="10dp" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="10dp"
+            android:layout_weight="1"
+            android:text="NEX Arcade — 7 Interactive Mini-Games"
+            android:textColor="@color/nex_text_primary"
+            android:textSize="15sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_marginTop="10dp"
+        android:layout_weight="1"
+        android:fillViewport="true">
+
+        <LinearLayout
+            android:id="@+id/gamesHubList"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical" />
+    </ScrollView>
+
+</LinearLayout>

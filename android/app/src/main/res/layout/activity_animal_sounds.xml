@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#000000"
+    android:keepScreenOn="true"
+    android:orientation="vertical"
+    android:padding="12dp">
+
+    <!-- Top Control Bar -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@drawable/bg_cyber_card"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:padding="8dp">
+
+        <Button
+            android:id="@+id/btnBackFromAnimals"
+            android:layout_width="wrap_content"
+            android:layout_height="38dp"
+            android:backgroundTint="#1E3346"
+            android:text="← Face"
+            android:textAllCaps="false"
+            android:textColor="@color/nex_text_primary"
+            android:textSize="12sp" />
+
+        <com.nex.robotpet.v6.ui.RobotEyesView
+            android:id="@+id/miniAnimalEyes"
+            android:layout_width="86dp"
+            android:layout_height="42dp"
+            android:layout_marginStart="10dp" />
+
+        <TextView
+            android:id="@+id/tvAnimalNowPlaying"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="10dp"
+            android:layout_weight="1"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:text="20 Animal Sounds — Tap any animal to play"
+            android:textColor="@color/nex_text_primary"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="4dp"
+            android:text="Vol"
+            android:textColor="@color/nex_text_secondary"
+            android:textSize="12sp" />
+
+        <SeekBar
+            android:id="@+id/seekAnimalVolume"
+            android:layout_width="110dp"
+            android:layout_height="wrap_content"
+            android:max="100"
+            android:progress="85" />
+
+        <Button
+            android:id="@+id/btnStopAnimalSound"
+            android:layout_width="wrap_content"
+            android:layout_height="38dp"
+            android:layout_marginStart="6dp"
+            android:backgroundTint="#B71C1C"
+            android:text="Stop"
+            android:textAllCaps="false"
+            android:textColor="#FFFFFF"
+            android:textSize="12sp" />
+    </LinearLayout>
+
+    <!-- Scrollable Grid of 20 Animal Buttons -->
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_marginTop="10dp"
+        android:layout_weight="1"
+        android:fillViewport="true">
+
+        <LinearLayout
+            android:id="@+id/animalGridRows"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical" />
+    </ScrollView>
+
+</LinearLayout>

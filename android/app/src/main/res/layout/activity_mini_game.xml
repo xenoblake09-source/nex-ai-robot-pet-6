@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#000000"
+    android:keepScreenOn="true"
+    android:orientation="vertical"
+    android:padding="10dp">
+
+    <!-- Top Score & Control Bar -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@drawable/bg_cyber_card"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:padding="6dp">
+
+        <Button
+            android:id="@+id/btnBackFromGame"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:backgroundTint="#1E3346"
+            android:text="← Games"
+            android:textAllCaps="false"
+            android:textColor="@color/nex_text_primary"
+            android:textSize="12sp" />
+
+        <TextView
+            android:id="@+id/tvMiniGameTitle"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="10dp"
+            android:layout_weight="1"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:text="Mini-Game"
+            android:textColor="@color/nex_cyan"
+            android:textSize="15sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/tvMiniGameScore"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="12dp"
+            android:fontFamily="monospace"
+            android:text="Score: 0"
+            android:textColor="@color/nex_text_primary"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/tvMiniGameBest"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="12dp"
+            android:fontFamily="monospace"
+            android:text="Best: 0"
+            android:textColor="@color/nex_accent_gold"
+            android:textSize="12sp" />
+
+        <Button
+            android:id="@+id/btnGameInstructions"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:backgroundTint="#263238"
+            android:text="How to Play"
+            android:textAllCaps="false"
+            android:textColor="@color/nex_text_primary"
+            android:textSize="11sp" />
+
+        <Button
+            android:id="@+id/btnGameRestart"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:layout_marginStart="6dp"
+            android:backgroundTint="#00838F"
+            android:text="Restart"
+            android:textAllCaps="false"
+            android:textColor="#FFFFFF"
+            android:textSize="12sp" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/tvGameStatusBanner"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:gravity="center"
+        android:maxLines="2"
+        android:text="Instructions"
+        android:textColor="@color/nex_text_secondary"
+        android:textSize="12sp" />
+
+    <!-- Dynamic Game Arena -->
+    <FrameLayout
+        android:id="@+id/gameArenaContainer"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_marginTop="6dp"
+        android:layout_weight="1"
+        android:background="@drawable/bg_cyber_card"
+        android:padding="8dp" />
+
+</LinearLayout>

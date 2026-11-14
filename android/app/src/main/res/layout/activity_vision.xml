@@ -1,0 +1,163 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#000000"
+    android:keepScreenOn="true"
+    android:orientation="horizontal"
+    android:padding="10dp">
+
+    <!-- Left Pane: CameraX Preview + Face Tracking Overlay -->
+    <FrameLayout
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1.15"
+        android:background="@drawable/bg_cyber_card"
+        android:padding="4dp">
+
+        <androidx.camera.view.PreviewView
+            android:id="@+id/cameraPreviewView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+
+        <com.nex.robotpet.v6.vision.FaceTrackingOverlayView
+            android:id="@+id/faceOverlayView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+
+        <TextView
+            android:id="@+id/tvFaceStatusBadge"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="top|start"
+            android:layout_margin="10dp"
+            android:background="@drawable/bg_status_pill"
+            android:paddingStart="10dp"
+            android:paddingTop="5dp"
+            android:paddingEnd="10dp"
+            android:paddingBottom="5dp"
+            android:text="Camera Inactive"
+            android:textColor="@color/nex_text_primary"
+            android:textSize="11sp"
+            android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/btnSwitchCamera"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:layout_gravity="bottom|end"
+            android:layout_margin="10dp"
+            android:backgroundTint="#CC172A3A"
+            android:text="Flip Camera"
+            android:textAllCaps="false"
+            android:textColor="@color/nex_text_primary"
+            android:textSize="11sp" />
+    </FrameLayout>
+
+    <!-- Right Pane: NEX Face-Tracking Eyes & Gemini Vision Controls -->
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_marginStart="10dp"
+        android:layout_weight="1"
+        android:background="@drawable/bg_cyber_card"
+        android:orientation="vertical"
+        android:padding="10dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/btnBackFromVision"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:backgroundTint="#1E3346"
+                android:text="← Face"
+                android:textAllCaps="false"
+                android:textColor="@color/nex_text_primary"
+                android:textSize="12sp" />
+
+            <com.nex.robotpet.v6.ui.RobotEyesView
+                android:id="@+id/visionMiniEyes"
+                android:layout_width="0dp"
+                android:layout_height="52dp"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/tvVisionModeNote"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:text="On-device Face Tracking works offline. AI Object Recognition requires Internet + Gemini Backend."
+            android:textColor="@color/nex_text_secondary"
+            android:textSize="11sp" />
+
+        <EditText
+            android:id="@+id/etVisionPrompt"
+            android:layout_width="match_parent"
+            android:layout_height="40dp"
+            android:layout_marginTop="6dp"
+            android:background="@drawable/bg_cyber_button"
+            android:hint="Ask e.g. What is this?"
+            android:imeOptions="actionDone"
+            android:inputType="text"
+            android:paddingStart="10dp"
+            android:paddingEnd="10dp"
+            android:text="What is this?"
+            android:textColor="@color/nex_text_primary"
+            android:textColorHint="#668FB3C9"
+            android:textSize="13sp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/btnAskWhatIsThis"
+                android:layout_width="0dp"
+                android:layout_height="40dp"
+                android:layout_weight="1"
+                android:backgroundTint="#00838F"
+                android:text="Analyze Frame"
+                android:textAllCaps="false"
+                android:textColor="#FFFFFF"
+                android:textSize="12sp" />
+
+            <Button
+                android:id="@+id/btnVoiceVisionAsk"
+                android:layout_width="wrap_content"
+                android:layout_height="40dp"
+                android:layout_marginStart="6dp"
+                android:backgroundTint="#1E3346"
+                android:text="Voice Ask"
+                android:textAllCaps="false"
+                android:textColor="@color/nex_text_primary"
+                android:textSize="12sp" />
+        </LinearLayout>
+
+        <ScrollView
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_marginTop="8dp"
+            android:layout_weight="1">
+
+            <TextView
+                android:id="@+id/tvVisionResult"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:lineSpacingExtra="2dp"
+                android:text="Point the camera at any object and tap 'Analyze Frame' or ask 'What is this?'."
+                android:textColor="@color/nex_text_primary"
+                android:textSize="13sp" />
+        </ScrollView>
+
+    </LinearLayout>
+
+</LinearLayout>

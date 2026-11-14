@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="nex6_backend_privacy_setup"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher_round"
+        android:shortcutShortLabel="@string/shortcut_setup_short"
+        android:shortcutLongLabel="@string/shortcut_setup_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.nex.robotpet.v6"
+            android:targetClass="com.nex.robotpet.v6.BackendSetupActivity" />
+    </shortcut>
+</shortcuts>
