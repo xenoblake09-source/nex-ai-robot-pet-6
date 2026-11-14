@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: nex-ai-robot-pet-6-backend
+    runtime: python
+    rootDir: backend
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-3.5-flash-lite
+      - key: GEMINI_TIMEOUT_SECONDS
+        value: "20"
+      - key: GEMINI_MAX_RETRIES
+        value: "2"
+      - key: NEX_RATE_LIMIT_PER_MIN
+        value: "40"

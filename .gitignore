@@ -1,0 +1,40 @@
+# Secrets & local environment files (NEVER commit)
+.env
+.env.*
+!.env.example
+*.jks
+*.keystore
+*.pem
+*.p12
+local.properties
+
+# Python build / test / virtualenvs
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.venv/
+venv/
+ENV/
+.coverage
+htmlcov/
+
+# Android / Gradle build outputs
+.gradle/
+build/
+android/.gradle/
+android/build/
+android/app/build/
+captures/
+.externalNativeBuild/
+.cxx/
+*.apk
+*.aab
+*.ap_
+*.dex
+
+# IDE / OS metadata
+.idea/
+*.iml
+.DS_Store
+Thumbs.db
