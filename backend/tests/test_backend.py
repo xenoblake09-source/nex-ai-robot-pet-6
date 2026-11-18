@@ -61,7 +61,41 @@ class TestUnit:
         paths = schema_resp.json()["paths"]
         assert "/health" in paths
         assert "/chat" in paths
+        assert "/search" in paths
         assert "/vision" in paths
+
+    def test_all_32_expressions_supported_and_normalized(self):
+        expected_32 = {
+            "NORMAL", "BLINK", "DOUBLE_BLINK", "HAPPY", "VERY_HAPPY", "SAD", "ANGRY",
+            "SURPRISED", "SLEEPY", "SLEEP", "THINKING", "LISTENING", "SPEAKING", "LAUGH",
+            "CRY", "LOVE", "HEART", "EXCITED", "CURIOUS", "CONFUSED", "SHY", "WINKING",
+            "GAMING", "DANCE", "BORED", "SCARED", "TIRED", "PROUD", "SUSPICIOUS",
+            "FOCUSED", "GREETING", "CUSTOM",
+        }
+        assert nex_app.VALID_EXPRESSIONS == expected_32
+        assert len(nex_app.VALID_EXPRESSIONS) == 32
+        for expr in expected_32:
+            assert nex_app.normalize_expression(expr) == expr
+        assert nex_app.normalize_expression("SLEEPING") == "SLEEP"
+        assert nex_app.normalize_expression("DANCING") == "DANCE"
+        assert nex_app.normalize_expression("LAUGHING") == "LAUGH"
+        assert nex_app.normalize_expression("CRYING") == "CRY"
+        assert nex_app.normalize_expression("WINK") == "WINKING"
+        assert nex_app.normalize_expression("SPEAK") == "SPEAKING"
+        assert nex_app.normalize_expression("GREET") == "GREETING"
+
+    def test_live_search_query_detection(self):
+        assert nex_app.needs_live_search("What is the latest national news in India today?") is True
+        assert nex_app.needs_live_search("Latest space and astronomy discoveries") is True
+        assert nex_app.needs_live_search("Current cricket score today") is True
+        assert nex_app.needs_live_search("Explain photosynthesis simply.") is False
+        assert nex_app.needs_live_search("What is Newton's second law of motion?") is False
+
+    def test_live_rss_news_retrieval_fetches_real_current_headlines(self):
+        snippets, sources = nex_app.fetch_live_news_snippets("India ISRO space news", max_items=4)
+        assert len(snippets) >= 1
+        assert len(sources) >= 1
+        assert any("|" in s for s in snippets)
 
     def test_health_endpoint_unconfigured_and_configured_never_exposes_secrets(self, monkeypatch):
         client = TestClient(nex_app.app)
@@ -283,6 +317,53 @@ class TestMockedGeminiAPI:
             assert body["objects_detected"] == ["poster", "blue card"]
             mock_client.models.generate_content.assert_called_once()
 
+    def test_grounded_chat_and_search_endpoints_and_safe_failure(self, monkeypatch):
+        monkeypatch.setenv("GEMINI_API_KEY", "AI" + "za" + "MockUnitToken_MockKeyForSearch12345")
+        monkeypatch.setenv("GEMINI_MAX_RETRIES", "0")
+
+        fake_chunk = SimpleNamespace(web=SimpleNamespace(title="ISRO Official Update", uri="https://www.isro.gov.in"))
+        fake_candidate = SimpleNamespace(
+            grounding_metadata=SimpleNamespace(
+                grounding_chunks=[fake_chunk],
+                web_search_queries=["ISRO latest space news"],
+            )
+        )
+        mock_client = MagicMock()
+        mock_client.models.generate_content.return_value = SimpleNamespace(
+            text=json.dumps({
+                "reply": "As of today, ISRO reported a confirmed satellite launch update.",
+                "expression": "EXCITED",
+                "remembered_name": None,
+            }),
+            candidates=[fake_candidate],
+        )
+
+        with patch.object(nex_app, "create_genai_client", return_value=mock_client):
+            client = TestClient(nex_app.app)
+            # 1. /chat automatically grounds live news queries
+            r_chat = client.post("/chat", json={"message": "What is the latest space news today?"})
+            assert r_chat.status_code == 200
+            chat_data = r_chat.json()
+            assert chat_data["source"] == "gemini_grounded"
+            assert chat_data["expression"] == "EXCITED"
+            assert "ISRO" in chat_data["reply"]
+
+            # 2. /search endpoint returns grounded reply + sources
+            r_search = client.post("/search", json={"query": "Latest ISRO space news"})
+            assert r_search.status_code == 200
+            search_data = r_search.json()
+            assert search_data["source"] == "gemini_grounded"
+            assert "ISRO Official Update" in search_data["sources"]
+
+        # 3. Safe failure when live search fails (never invents news)
+        failing_client = MagicMock()
+        failing_client.models.generate_content.side_effect = FakeAPIError(503, "Search unavailable")
+        with patch.object(nex_app, "create_genai_client", return_value=failing_client):
+            client = TestClient(nex_app.app)
+            r_fail = client.post("/search", json={"query": "Breaking national news today"})
+            assert r_fail.status_code == 503
+            assert r_fail.json()["detail"]["code"] == "LIVE_SEARCH_UNAVAILABLE"
+
     @pytest.mark.parametrize(
         "err_code,err_msg,expected_http,expected_code",
         [
@@ -367,7 +448,7 @@ class TestMockedGeminiAPI:
 
 @pytest.mark.skipif(
     not os.getenv("GEMINI_API_KEY"),
-    reason="Real GEMINI_API_KEY is not present in build sandbox environment; live Gemini test skipped honestly.",
+    reason="Real GEMINI_API_KEY is not present in local build sandbox environment; local direct SDK test skipped honestly.",
 )
 class TestLiveGeminiAPI:
     def test_live_gemini_chat_roundtrip(self):
@@ -378,3 +459,82 @@ class TestLiveGeminiAPI:
         assert data["source"] == "gemini"
         assert len(data["reply"]) > 0
         assert "aura" not in data["reply"].lower()
+
+
+@pytest.mark.skipif(
+    not os.getenv("NEX_LIVE_BACKEND_URL"),
+    reason="Set NEX_LIVE_BACKEND_URL=https://nex-ai-robot-pet-6-backend.onrender.com to run live Render integration tests.",
+)
+class TestLiveDeployedRenderBackend:
+    """Real end-to-end tests against the deployed Render cloud backend (uses real Gemini API on Render)."""
+
+    def test_deployed_render_health(self):
+        import httpx
+        base = os.environ["NEX_LIVE_BACKEND_URL"].rstrip("/")
+        resp = httpx.get(f"{base}/health", timeout=45.0)
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["status"] == "ok"
+        assert body["sdk"] == "google-genai"
+        assert body["gemini_configured"] is True
+        assert body["configured_model"] == "gemini-3.5-flash-lite"
+        assert "key" not in json.dumps(body).lower()
+
+    def test_deployed_render_creator_identity(self):
+        import httpx
+        base = os.environ["NEX_LIVE_BACKEND_URL"].rstrip("/")
+        resp = httpx.post(
+            f"{base}/chat",
+            json={"message": "Who created you?", "language_hint": "en"},
+            timeout=30.0,
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["reply"] == "ARNAV, DIVYA AND ARYAN created me."
+        assert body["source"] == "nex_identity"
+
+    def test_deployed_render_real_gemini_chat(self):
+        import httpx
+        base = os.environ["NEX_LIVE_BACKEND_URL"].rstrip("/")
+        resp = httpx.post(
+            f"{base}/chat",
+            json={
+                "message": "Hello NEX! Tell me one short science fact in one sentence.",
+                "language_hint": "en",
+                "user_name": "Arnav",
+                "allow_memory": True,
+                "history": [],
+            },
+            timeout=45.0,
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["source"] == "gemini"
+        assert body["model_used"] == "gemini-3.5-flash-lite"
+        assert len(body["reply"].strip()) > 10
+        assert "aura" not in body["reply"].lower()
+
+    def test_deployed_render_real_gemini_vision(self):
+        import httpx
+        base = os.environ["NEX_LIVE_BACKEND_URL"].rstrip("/")
+        img = Image.new("RGB", (48, 48), color=(0, 200, 90))
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=88)
+        b64 = base64.b64encode(buf.getvalue()).decode("ascii")
+        resp = httpx.post(
+            f"{base}/vision",
+            json={
+                "prompt": "What color is this image? Reply in one short sentence.",
+                "image_base64": b64,
+                "mime_type": "image/jpeg",
+                "language_hint": "en",
+            },
+            timeout=45.0,
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["source"] == "gemini"
+        assert body["model_used"] == "gemini-3.5-flash-lite"
+        assert len(body["reply"].strip()) > 5
+        assert "aura" not in body["reply"].lower()
+

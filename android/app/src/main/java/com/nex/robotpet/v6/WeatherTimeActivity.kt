@@ -178,7 +178,7 @@ class WeatherTimeActivity : AppCompatActivity() {
     }
 
     private fun fetchCityWeather(city: String) {
-        if (!networkMonitor.isCurrentlyOnline()) {
+        if (!networkMonitor.hasNetworkTransport()) {
             latestReport = null
             miniEyes.setExpression(NexExpression.SAD)
             tvWeatherDetails.text =
@@ -192,6 +192,7 @@ class WeatherTimeActivity : AppCompatActivity() {
         lifecycleScope.launch {
             when (val res = weatherService.fetchByCityName(city)) {
                 is WeatherResult.Success -> {
+                    networkMonitor.confirmHttpsReachable()
                     latestReport = res.report
                     miniEyes.setExpression(NexExpression.HAPPY)
                     tvWeatherDetails.text = res.report.toCardDetails()
@@ -206,7 +207,7 @@ class WeatherTimeActivity : AppCompatActivity() {
     }
 
     private fun fetchGpsWeather() {
-        if (!networkMonitor.isCurrentlyOnline()) {
+        if (!networkMonitor.hasNetworkTransport()) {
             tvWeatherDetails.text = "Offline — connect to the internet to fetch live GPS weather."
             return
         }
@@ -228,6 +229,7 @@ class WeatherTimeActivity : AppCompatActivity() {
         lifecycleScope.launch {
             when (val res = weatherService.fetchByCoordinates(loc.latitude, loc.longitude, "Current Location")) {
                 is WeatherResult.Success -> {
+                    networkMonitor.confirmHttpsReachable()
                     latestReport = res.report
                     miniEyes.setExpression(NexExpression.HAPPY)
                     tvWeatherDetails.text = res.report.toCardDetails()

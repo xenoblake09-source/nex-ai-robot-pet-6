@@ -32,6 +32,7 @@ import com.nex.robotpet.v6.network.NexBackendClient
 import com.nex.robotpet.v6.ui.RobotEyesView
 import com.nex.robotpet.v6.util.FullscreenHelper
 import com.nex.robotpet.v6.util.LanguageHelper
+import com.nex.robotpet.v6.util.LanguageMode
 import com.nex.robotpet.v6.vision.FaceTrackingOverlayView
 import com.nex.robotpet.v6.voice.VoiceSystemManager
 import kotlinx.coroutines.launch
@@ -298,7 +299,7 @@ class VisionActivity : AppCompatActivity() {
     private fun analyzeCurrentCameraFrame(prompt: String) {
         val lang = LanguageHelper.detectLanguage(prompt)
 
-        if (!networkMonitor.isCurrentlyOnline()) {
+        if (!networkMonitor.hasNetworkTransport()) {
             val msg = "Online internet connection is required for Gemini AI object recognition. Face detection and tracking continue to work offline."
             tvVisionResult.text = msg
             miniEyes.setExpression(NexExpression.CONFUSED)
@@ -333,6 +334,7 @@ class VisionActivity : AppCompatActivity() {
         lifecycleScope.launch {
             when (val res = backendClient.sendVision(baseUrl, prompt, jpegBytes, lang)) {
                 is BackendResult.Success -> {
+                    networkMonitor.confirmHttpsReachable()
                     val data = res.data
                     miniEyes.setExpression(data.expression)
                     val objLine = if (data.objectsDetected.isNotEmpty()) {
@@ -341,12 +343,12 @@ class VisionActivity : AppCompatActivity() {
                         ""
                     }
                     tvVisionResult.text = "${data.reply}$objLine"
-                    voiceManager.speak(data.reply, lang, resumeWakeAfter = false)
+                    voiceManager.speak(data.reply, data.language, resumeWakeAfter = false)
                 }
                 is BackendResult.Error -> {
                     miniEyes.setExpression(NexExpression.SAD)
                     tvVisionResult.text = "Vision Error (${res.code}): ${res.safeMessage}"
-                    voiceManager.speak(res.safeMessage, lang, resumeWakeAfter = false)
+                    voiceManager.speak(res.safeMessage, LanguageMode.ENGLISH, resumeWakeAfter = false)
                 }
             }
         }

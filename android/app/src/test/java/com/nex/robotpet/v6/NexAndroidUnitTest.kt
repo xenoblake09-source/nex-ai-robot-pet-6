@@ -5,6 +5,8 @@ import com.nex.robotpet.v6.data.NexExpression
 import com.nex.robotpet.v6.data.SchoolKnowledgeRepository
 import com.nex.robotpet.v6.games.MiniGameCatalog
 import com.nex.robotpet.v6.memory.MemoryManager
+import com.nex.robotpet.v6.network.BackendResult
+import com.nex.robotpet.v6.network.NexBackendClient
 import com.nex.robotpet.v6.util.CommandRouter
 import com.nex.robotpet.v6.util.LanguageHelper
 import com.nex.robotpet.v6.util.LanguageMode
@@ -47,37 +49,92 @@ class NexAndroidUnitTest {
     }
 
     @Test
-    fun all17Expressions_existMapAndRouteByVoice() {
-        assertEquals(17, NexExpression.entries.size)
+    fun all32Expressions_existMapAndRouteByVoice() {
+        assertEquals(32, NexExpression.entries.size)
         assertEquals(NexExpression.LOVE, NexExpression.fromBackendTag("LOVE_HEART"))
+        assertEquals(NexExpression.HEART, NexExpression.fromBackendTag("HEART"))
         assertEquals(NexExpression.DANCE, NexExpression.fromBackendTag("dance"))
+        assertEquals(NexExpression.SLEEP, NexExpression.fromBackendTag("SLEEPING"))
+        assertEquals(NexExpression.SLEEPY, NexExpression.fromBackendTag("SLEEPY"))
+        assertEquals(NexExpression.WINKING, NexExpression.fromBackendTag("WINK"))
+        assertEquals(NexExpression.SPEAKING, NexExpression.fromBackendTag("SPEAK"))
+        assertEquals(NexExpression.GREETING, NexExpression.fromBackendTag("GREET"))
         assertEquals(NexExpression.CUSTOM, NexExpression.fromBackendTag("CUSTOM"))
 
         val voiceToExpression = mapOf(
+            "normal eyes" to NexExpression.NORMAL,
+            "blink your eyes" to NexExpression.BLINK,
+            "double blink" to NexExpression.DOUBLE_BLINK,
             "Hey NEX show happy eyes" to NexExpression.HAPPY,
+            "very happy eyes" to NexExpression.VERY_HAPPY,
             "look sad" to NexExpression.SAD,
             "show angry face" to NexExpression.ANGRY,
-            "go to sleep" to NexExpression.SLEEP,
-            "let's dance" to NexExpression.DANCE,
-            "blink your eyes" to NexExpression.BLINK,
             "look surprised" to NexExpression.SURPRISED,
+            "sleepy eyes" to NexExpression.SLEEPY,
+            "go to sleep" to NexExpression.SLEEP,
             "thinking face" to NexExpression.THINKING,
             "listening eyes" to NexExpression.LISTENING,
-            "gaming mode" to NexExpression.GAMING,
+            "speaking eyes" to NexExpression.SPEAKING,
             "laughing face" to NexExpression.LAUGH,
             "crying eyes" to NexExpression.CRY,
-            "show heart eyes" to NexExpression.LOVE,
-            "look curious" to NexExpression.CURIOUS,
+            "love eyes" to NexExpression.LOVE,
+            "show heart eyes" to NexExpression.HEART,
             "look excited" to NexExpression.EXCITED,
+            "look curious" to NexExpression.CURIOUS,
             "confused face" to NexExpression.CONFUSED,
+            "look shy" to NexExpression.SHY,
+            "winking eyes" to NexExpression.WINKING,
+            "gaming mode" to NexExpression.GAMING,
+            "let's dance" to NexExpression.DANCE,
+            "look bored" to NexExpression.BORED,
+            "look scared" to NexExpression.SCARED,
+            "look tired" to NexExpression.TIRED,
+            "look proud" to NexExpression.PROUD,
+            "look suspicious" to NexExpression.SUSPICIOUS,
+            "look focused" to NexExpression.FOCUSED,
+            "greeting eyes" to NexExpression.GREETING,
             "custom eyes" to NexExpression.CUSTOM
         )
-        assertEquals(17, voiceToExpression.size)
+        assertEquals(32, voiceToExpression.size)
         for ((phrase, expectedExpr) in voiceToExpression) {
             val routed = CommandRouter.route(phrase)
             assertTrue("Expected SetExpression for '$phrase', got $routed", routed is RoutedAction.SetExpression)
             assertEquals(expectedExpr, (routed as RoutedAction.SetExpression).expression)
         }
+    }
+
+    @Test
+    fun cameraOnFaceAndPreferenceAndVoiceHelpers_workCorrectly() {
+        val whatIsThis = CommandRouter.route("What is this?")
+        assertTrue(whatIsThis is RoutedAction.AnalyzeCameraOnFace)
+
+        val sceneDesc = CommandRouter.route("Describe what you see")
+        assertTrue(sceneDesc is RoutedAction.AnalyzeCameraOnFace)
+
+        val seeMe = CommandRouter.route("Can you see me?")
+        assertTrue(seeMe is RoutedAction.SetFaceTrackingOnFace)
+        assertTrue((seeMe as RoutedAction.SetFaceTrackingOnFace).checkPresenceOnly)
+
+        val trackFace = CommandRouter.route("Track my face")
+        assertTrue(trackFace is RoutedAction.SetFaceTrackingOnFace)
+        assertTrue((trackFace as RoutedAction.SetFaceTrackingOnFace).enabled)
+        assertFalse(trackFace.checkPresenceOnly)
+
+        val stopTrack = CommandRouter.route("Stop face tracking")
+        assertTrue(stopTrack is RoutedAction.SetFaceTrackingOnFace)
+        assertFalse((stopTrack as RoutedAction.SetFaceTrackingOnFace).enabled)
+
+        val openCam = CommandRouter.route("Open camera")
+        assertTrue(openCam is RoutedAction.OpenScreen)
+        assertEquals(ScreenTarget.VISION, (openCam as RoutedAction.OpenScreen).screen)
+
+        val pref = CommandRouter.route("Remember that I like robotics and cricket")
+        assertTrue(pref is RoutedAction.SaveUserPreference)
+
+        assertTrue(VoiceSystemManager.isMeaningfulUtterance("Hello friend"))
+        assertFalse(VoiceSystemManager.isMeaningfulUtterance("uh"))
+        assertFalse(VoiceSystemManager.isMeaningfulUtterance(" "))
+        assertEquals("Hello NEX friend", VoiceSystemManager.cleanTextForNaturalSpeech("**Hello** _NEX_ `friend`"))
     }
 
     @Test
@@ -154,6 +211,11 @@ class NexAndroidUnitTest {
             "https://nex-ai-robot-pet-6-backend.onrender.com",
             MemoryManager.validateHttpsBackendUrl("https://nex-ai-robot-pet-6-backend.onrender.com/")
         )
+        // Auto-heal missing -backend suffix typo to live deployed Render service
+        assertEquals(
+            "https://nex-ai-robot-pet-6-backend.onrender.com",
+            MemoryManager.validateHttpsBackendUrl("https://nex-ai-robot-pet-6.onrender.com")
+        )
         // Reject HTTP cleartext
         assertNull(MemoryManager.validateHttpsBackendUrl("http://nex-ai-robot-pet-6-backend.onrender.com"))
         // Reject old NEX 5 Render URLs
@@ -219,9 +281,12 @@ class NexAndroidUnitTest {
 
     @Test
     fun commandRouter_routesVisionMusicWeatherTimeAndGeminiChat() {
-        val vision = CommandRouter.route("Hey NEX what is this?")
-        assertTrue(vision is RoutedAction.OpenScreen)
-        assertEquals(ScreenTarget.VISION, (vision as RoutedAction.OpenScreen).screen)
+        val visionOnFace = CommandRouter.route("Hey NEX what is this?")
+        assertTrue(visionOnFace is RoutedAction.AnalyzeCameraOnFace)
+
+        val visionScreen = CommandRouter.route("Hey NEX open camera")
+        assertTrue(visionScreen is RoutedAction.OpenScreen)
+        assertEquals(ScreenTarget.VISION, (visionScreen as RoutedAction.OpenScreen).screen)
 
         val music = CommandRouter.route("गाना चलाओ")
         assertTrue(music is RoutedAction.OpenScreen)
@@ -253,5 +318,60 @@ class NexAndroidUnitTest {
         assertEquals("Bagaha, Bihar", report.locationLabel)
         assertTrue("Expected plausible Celsius temperature, got ${report.temperatureC}", report.temperatureC in -20.0..55.0)
         assertTrue(report.humidityPercent in 0..100)
+    }
+
+    @Test
+    fun liveDeployedRenderBackend_healthCreatorChatVisionAndErrorHandling() {
+        val client = NexBackendClient()
+        val liveUrl = MemoryManager.DEFAULT_NEX6_BACKEND_URL
+
+        kotlinx.coroutines.runBlocking {
+            // 1. Live /health check against https://nex-ai-robot-pet-6-backend.onrender.com
+            val health = client.checkHealth(liveUrl)
+            assertTrue("Expected live HealthStatus Success, got $health", health is BackendResult.Success)
+            val healthData = (health as BackendResult.Success).data
+            assertTrue("Expected status=ok on deployed Render backend", healthData.ok)
+            assertTrue("Expected gemini_configured=true on deployed Render backend", healthData.geminiConfigured)
+            assertEquals("gemini-3.5-flash-lite", healthData.configuredModel)
+
+            // 2. Live /chat creator attribution check
+            val creator = client.sendChat(
+                baseUrlRaw = liveUrl,
+                message = "Who created you?",
+                languageHint = LanguageMode.ENGLISH,
+                userName = null,
+                allowMemory = false,
+                history = emptyList()
+            )
+            assertTrue("Expected live creator chat Success, got $creator", creator is BackendResult.Success)
+            assertEquals("ARNAV, DIVYA AND ARYAN created me.", (creator as BackendResult.Success).data.reply)
+
+            // 3. Real live Google Gemini AI /chat roundtrip via NexBackendClient
+            val liveChat = client.sendChat(
+                baseUrlRaw = liveUrl,
+                message = "Hello NEX! Share one short fact about planets in one sentence.",
+                languageHint = LanguageMode.ENGLISH,
+                userName = "Arnav",
+                allowMemory = true,
+                history = emptyList()
+            )
+            assertTrue("Expected real live Gemini chat Success, got $liveChat", liveChat is BackendResult.Success)
+            val chatData = (liveChat as BackendResult.Success).data
+            assertTrue("Expected non-blank Gemini reply", chatData.reply.length > 10)
+            assertFalse(chatData.reply.contains("aura", ignoreCase = true))
+            assertEquals("gemini-3.5-flash-lite", chatData.modelUsed)
+
+            // 4. Honest error reporting (never fakes AI replies) when hitting a nonexistent Render host
+            val deadHost = client.sendChat(
+                baseUrlRaw = "https://nex-ai-robot-pet-6-nonexistent-audit-probe.onrender.com",
+                message = "Hello",
+                languageHint = LanguageMode.ENGLISH,
+                userName = null,
+                allowMemory = false,
+                history = emptyList()
+            )
+            assertTrue("Expected BackendResult.Error for nonexistent Render service", deadHost is BackendResult.Error)
+            assertEquals("RENDER_SERVICE_NOT_FOUND", (deadHost as BackendResult.Error).code)
+        }
     }
 }

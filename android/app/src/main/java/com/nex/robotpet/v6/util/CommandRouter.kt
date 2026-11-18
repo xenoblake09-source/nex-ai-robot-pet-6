@@ -31,6 +31,18 @@ sealed class RoutedAction {
         val language: LanguageMode
     ) : RoutedAction()
 
+    data class AnalyzeCameraOnFace(
+        val prompt: String,
+        val useFrontCamera: Boolean = false,
+        val language: LanguageMode
+    ) : RoutedAction()
+
+    data class SetFaceTrackingOnFace(
+        val enabled: Boolean,
+        val checkPresenceOnly: Boolean = false,
+        val language: LanguageMode
+    ) : RoutedAction()
+
     data class SpeakTimeOrDate(
         val askDateOnly: Boolean,
         val language: LanguageMode
@@ -43,6 +55,11 @@ sealed class RoutedAction {
 
     data class SaveUserName(
         val name: String,
+        val language: LanguageMode
+    ) : RoutedAction()
+
+    data class SaveUserPreference(
+        val preference: String,
         val language: LanguageMode
     ) : RoutedAction()
 
@@ -77,9 +94,9 @@ enum class ScreenTarget {
 /**
  * Deterministic voice & text intent router for NEX 6.0.
  * Handles immediate robot commands (creator identity, NEX self-ID, Montfort Bagaha school
- * verified facts, 20 animal sounds, all 17 expressions, camera/vision, music/dance,
- * 7 mini-games, time/date, live weather, and memory/privacy controls) and delegates
- * open-ended conversation/questions to the real Google Gemini backend.
+ * verified facts, 20 animal sounds, all 32 expressions, background camera/vision & face tracking
+ * on the pure robot face, music/dance, 7 mini-games, time/date, live weather, and memory/privacy
+ * controls) and delegates open-ended conversation/questions/live-search to the Google Gemini backend.
  */
 object CommandRouter {
 
@@ -93,6 +110,12 @@ object CommandRouter {
         Regex("\\bcall\\s+me\\s+([A-Za-z][A-Za-z'-]{1,22})\\b", RegexOption.IGNORE_CASE),
         Regex("\\bmera\\s+naam\\s+([A-Za-z][A-Za-z'-]{1,22})\\s+hai\\b", RegexOption.IGNORE_CASE),
         Regex("मेरा\\s+नाम\\s+([^\\s।,.!?]{2,22})\\s+है")
+    )
+
+    private val preferencePatterns = listOf(
+        Regex("\\bremember\\s+that\\s+i\\s+(like|love|prefer|enjoy|study|play)\\s+(.+)$", RegexOption.IGNORE_CASE),
+        Regex("\\bmy\\s+favou?rite\\s+(subject|sport|game|food|color|colour|animal|hobby|topic)\\s+is\\s+(.+)$", RegexOption.IGNORE_CASE),
+        Regex("\\byaad\\s+rakhna\\s+mujhe\\s+(.+?)\\s+pasand\\s+hai\\b", RegexOption.IGNORE_CASE)
     )
 
     fun stripWakePhrase(raw: String): Pair<Boolean, String> {
@@ -112,7 +135,7 @@ object CommandRouter {
         if (LanguageHelper.isCreatorQuestion(text)) {
             return RoutedAction.SpeakImmediate(
                 speech = LanguageHelper.EXACT_CREATOR_RESPONSE,
-                expression = NexExpression.HAPPY,
+                expression = NexExpression.PROUD,
                 language = LanguageMode.ENGLISH
             )
         }
@@ -126,7 +149,7 @@ object CommandRouter {
                 LanguageMode.HINGLISH -> "Mera naam NEX hai! Main ek AI virtual robot pet hoon, aur ARNAV, DIVYA AND ARYAN created me."
                 LanguageMode.ENGLISH -> "I am NEX, an AI-powered virtual robot pet! ARNAV, DIVYA AND ARYAN created me."
             }
-            return RoutedAction.SpeakImmediate(reply, NexExpression.HAPPY, lang)
+            return RoutedAction.SpeakImmediate(reply, NexExpression.GREETING, lang)
         }
 
         // 3. Memory & Privacy Controls (Voice Clear / Disable / Enable)
@@ -143,7 +166,7 @@ object CommandRouter {
             return RoutedAction.SetMemoryEnabled(enabled = true, language = lang)
         }
 
-        // 4. Explicit Standalone Name Introduction
+        // 4. Explicit Standalone Name Introduction & Preference Consent Memory
         if (!text.contains("?")) {
             for (pat in nameIntroPatterns) {
                 val m = pat.find(text)
@@ -154,6 +177,15 @@ object CommandRouter {
                     }
                 }
             }
+            for (pat in preferencePatterns) {
+                val m = pat.find(text)
+                if (m != null) {
+                    val pref = m.groupValues.drop(1).joinToString(" ").trim('?', '.', '!', ' ')
+                    if (pref.isNotBlank()) {
+                        return RoutedAction.SaveUserPreference(pref, lang)
+                    }
+                }
+            }
         }
 
         // 5. Verified Montfort Senior Secondary School Bagaha Facts (Part K)
@@ -161,13 +193,42 @@ object CommandRouter {
             return RoutedAction.SpeakImmediate(schoolReply, NexExpression.HAPPY, lang)
         }
 
-        // 6. Camera & Computer Vision ("What is this?", "Open camera", "Look at this")
-        if (Regex("\\b(what\\s+is\\s+this|what's\\s+this|look\\s+at\\s+this|identify\\s+this|open\\s+camera|start\\s+camera|camera\\s+on|yeh\\s+kya\\s+hai|ye\\s+kya\\s+hai|camera\\s+kholo)\\b").containsMatchIn(lower)
-            || text.contains("यह क्या है") || text.contains("कैमरा खोलो")
+        // 6. Camera, Face Tracking & Object Recognition
+        // 6a. Stop face tracking on the main face
+        if (Regex("\\b(stop\\s+face\\s+tracking|stop\\s+tracking(\\s+my\\s+face)?|face\\s+tracking\\s+off|camera\\s+off)\\b").containsMatchIn(lower)
+            || text.contains("फेस ट्रैकिंग बंद")
+        ) {
+            return RoutedAction.SetFaceTrackingOnFace(enabled = false, checkPresenceOnly = false, language = lang)
+        }
+        // 6b. Detect whether a person is visible in the camera view ("Can you see me?", "Is anyone there?")
+        if (Regex("\\b(can\\s+you\\s+see\\s+me|do\\s+you\\s+see\\s+me|is\\s+anyone\\s+(there|visible|in\\s+front)|is\\s+a\\s+person\\s+visible|who\\s+is\\s+in\\s+front\\s+of\\s+you|kya\\s+tum\\s+mujhe\\s+dekh\\s+sakte\\s+ho)\\b").containsMatchIn(lower)
+            || text.contains("क्या तुम मुझे देख सकते हो") || text.contains("कोई दिख रहा है")
+        ) {
+            return RoutedAction.SetFaceTrackingOnFace(enabled = true, checkPresenceOnly = true, language = lang)
+        }
+        // 6c. Continuous face tracking on the pure black NEX face ("Track my face", "Look at me")
+        if (Regex("\\b(track\\s+my\\s+face|start\\s+face\\s+tracking|follow\\s+my\\s+face|look\\s+at\\s+me)\\b").containsMatchIn(lower)
+            || text.contains("मेरा चेहरा ट्रैक करो")
+        ) {
+            return RoutedAction.SetFaceTrackingOnFace(enabled = true, checkPresenceOnly = false, language = lang)
+        }
+        // 6d. Explicit request to open the dedicated Vision camera screen (preserves existing VisionActivity)
+        if (Regex("\\b(open\\s+camera|start\\s+camera|camera\\s+on|open\\s+vision|camera\\s+kholo)\\b").containsMatchIn(lower)
+            || text.contains("कैमरा खोलो")
         ) {
             return RoutedAction.OpenScreen(
                 screen = ScreenTarget.VISION,
                 initialVisionPrompt = text,
+                language = lang
+            )
+        }
+        // 6e. Background object/scene recognition directly on the pure black NEX face ("What is this?", "Describe what you see")
+        if (Regex("\\b(what\\s+is\\s+this|what's\\s+this|look\\s+at\\s+this|identify\\s+this|what\\s+am\\s+i\\s+holding|describe\\s+(what\\s+you\\s+see|this\\s+scene|the\\s+scene)|what\\s+do\\s+you\\s+see|what\\s+does\\s+the\\s+camera\\s+see|yeh\\s+kya\\s+hai|ye\\s+kya\\s+hai|samne\\s+kya\\s+hai)\\b").containsMatchIn(lower)
+            || text.contains("यह क्या है") || text.contains("सामने क्या है")
+        ) {
+            return RoutedAction.AnalyzeCameraOnFace(
+                prompt = text,
+                useFrontCamera = false,
                 language = lang
             )
         }
@@ -202,7 +263,7 @@ object CommandRouter {
         ) {
             return RoutedAction.OpenScreen(ScreenTarget.MUSIC_DANCE, language = lang)
         }
-        if (Regex("\\b(let's\\s+dance|dance\\s+for\\s+me|start\\s+dancing|do\\s+a\\s+dance|dance\\s+mode|naach\\s+ke\\s+dikhao|dance\\s+karo)\\b").containsMatchIn(lower)
+        if (Regex("\\b(let's\\s+dance|dance\\s+for\\s+me|start\\s+dancing|do\\s+a\\s+dance|dance\\s+mode|dancing\\s+(eyes|face|expression)|naach\\s+ke\\s+dikhao|dance\\s+karo)\\b").containsMatchIn(lower)
             || lower == "dance" || text.contains("नाच के दिखाओ") || text.contains("डांस करो")
         ) {
             return RoutedAction.SetExpression(NexExpression.DANCE, language = lang)
@@ -261,12 +322,12 @@ object CommandRouter {
             return RoutedAction.FetchWeather(cityHint = city, language = lang)
         }
 
-        // 12. Direct Eye Expression Commands (All 17 Expressions + Voice Custom Color Presets)
+        // 12. Direct Eye Expression Commands (All 32 Expressions + Voice Custom Color Presets)
         matchDirectExpressionCommand(lower, text)?.let { (expr, customColor) ->
             return RoutedAction.SetExpression(expr, customColorOverride = customColor, language = lang)
         }
 
-        // 13. Everything else -> Real Google Gemini AI Backend (/chat)
+        // 13. Everything else -> Real Google Gemini AI Backend (/chat, including grounded live search)
         return RoutedAction.AskGeminiChat(cleanText = text, language = lang)
     }
 
@@ -288,6 +349,18 @@ object CommandRouter {
         if (lower.split(Regex("\\s+")).size > 8) return null
 
         val expr = when {
+            Regex("\\b(normal\\s+(eyes|face|expression|mode)|default\\s+(eyes|face))\\b").containsMatchIn(lower)
+                || rawText.contains("सामान्य आँखें") -> NexExpression.NORMAL
+
+            Regex("\\b(double\\s+blink|blink\\s+twice|two\\s+blinks)\\b").containsMatchIn(lower)
+                || rawText.contains("दो बार पलक") -> NexExpression.DOUBLE_BLINK
+
+            Regex("\\b(blink|blink\\s+(your\\s+)?eyes|palak\\s+jhapkao)\\b").containsMatchIn(lower)
+                || rawText.contains("पलक झपकाओ") -> NexExpression.BLINK
+
+            Regex("\\b(very\\s+happy|super\\s+happy|extra\\s+happy|bahut\\s+khush)\\b").containsMatchIn(lower)
+                || rawText.contains("बहुत खुश") -> NexExpression.VERY_HAPPY
+
             Regex("\\b(be\\s+happy|happy\\s+(face|eyes|expression)|look\\s+happy|smile|khush\\s+ho\\s+jao)\\b").containsMatchIn(lower)
                 || rawText.contains("खुश हो जाओ") -> NexExpression.HAPPY
 
@@ -297,21 +370,21 @@ object CommandRouter {
             Regex("\\b(be\\s+angry|angry\\s+(face|eyes|expression)|look\\s+angry|gussa\\s+dikhao)\\b").containsMatchIn(lower)
                 || rawText.contains("गुस्सा दिखाओ") -> NexExpression.ANGRY
 
-            Regex("\\b(go\\s+to\\s+sleep|sleep\\s+(mode|face|eyes|expression)|sleepy\\s+eyes|so\\s+jao)\\b").containsMatchIn(lower)
-                || rawText.contains("सो जाओ") -> NexExpression.SLEEP
-
-            Regex("\\b(blink|blink\\s+(your\\s+)?eyes|palak\\s+jhapkao)\\b").containsMatchIn(lower)
-                || rawText.contains("पलक झपकाओ") -> NexExpression.BLINK
-
             Regex("\\b(be\\s+surprised|surprised\\s+(face|eyes|expression)|look\\s+surprised|hairan\\s+ho\\s+jao)\\b").containsMatchIn(lower)
                 || rawText.contains("हैरान चेहरा") -> NexExpression.SURPRISED
+
+            Regex("\\b(sleepy\\s+(eyes|face|expression)|look\\s+sleepy|feel\\s+sleepy|neend\\s+aa\\s+rahi)\\b").containsMatchIn(lower)
+                || rawText.contains("नींद आ रही") -> NexExpression.SLEEPY
+
+            Regex("\\b(go\\s+to\\s+sleep|sleep\\s+(mode|face|eyes|expression)|sleeping\\s+(eyes|face|expression)|so\\s+jao)\\b").containsMatchIn(lower)
+                || rawText.contains("सो जाओ") -> NexExpression.SLEEP
 
             Regex("\\b(thinking\\s+(face|eyes|expression|mode)|look\\s+thoughtful|sochne\\s+wala\\s+face)\\b").containsMatchIn(lower)
                 || rawText.contains("सोचने वाला चेहरा") -> NexExpression.THINKING
 
             Regex("\\b(listening\\s+(eyes|face|mode|expression))\\b").containsMatchIn(lower) -> NexExpression.LISTENING
 
-            Regex("\\b(gaming\\s+(eyes|face|mode|expression)|gamer\\s+(face|eyes|mode))\\b").containsMatchIn(lower) -> NexExpression.GAMING
+            Regex("\\b(speaking\\s+(eyes|face|mode|expression)|talking\\s+(eyes|face|expression))\\b").containsMatchIn(lower) -> NexExpression.SPEAKING
 
             Regex("\\b(laugh|laughing\\s+(face|eyes|expression)|haso|hasi\\s+dikhao)\\b").containsMatchIn(lower)
                 || rawText.contains("हँसो") -> NexExpression.LAUGH
@@ -319,14 +392,49 @@ object CommandRouter {
             Regex("\\b(cry|crying\\s+(face|eyes|expression)|ro\\s+ke\\s+dikhao)\\b").containsMatchIn(lower)
                 || rawText.contains("रोने वाला चेहरा") -> NexExpression.CRY
 
-            Regex("\\b(heart\\s+eyes|love\\s+(eyes|face|expression)|show\\s+love|i\\s+love\\s+you|love\\s+you\\s+nex|pyaar\\s+dikhao)\\b").containsMatchIn(lower)
-                || rawText.contains("हार्ट आईज") -> NexExpression.LOVE
+            Regex("\\b(heart\\s+(eyes|face|expression)|show\\s+hearts?)\\b").containsMatchIn(lower)
+                || rawText.contains("हार्ट आईज") -> NexExpression.HEART
 
-            Regex("\\b(be\\s+curious|curious\\s+(face|eyes|expression)|look\\s+curious)\\b").containsMatchIn(lower) -> NexExpression.CURIOUS
+            Regex("\\b(love\\s+(eyes|face|expression)|show\\s+love|i\\s+love\\s+you|love\\s+you\\s+nex|pyaar\\s+dikhao)\\b").containsMatchIn(lower)
+                || rawText.contains("प्यार दिखाओ") -> NexExpression.LOVE
 
-            Regex("\\b(be\\s+excited|excited\\s+(face|eyes|expression)|look\\s+excited)\\b").containsMatchIn(lower) -> NexExpression.EXCITED
+            Regex("\\b(be\\s+excited|excited\\s+(face|eyes|expression)|look\\s+excited)\\b").containsMatchIn(lower)
+                || rawText.contains("उत्साहित") -> NexExpression.EXCITED
 
-            Regex("\\b(be\\s+confused|confused\\s+(face|eyes|expression)|look\\s+confused)\\b").containsMatchIn(lower) -> NexExpression.CONFUSED
+            Regex("\\b(be\\s+curious|curious\\s+(face|eyes|expression)|look\\s+curious)\\b").containsMatchIn(lower)
+                || rawText.contains("जिज्ञासु") -> NexExpression.CURIOUS
+
+            Regex("\\b(be\\s+confused|confused\\s+(face|eyes|expression)|look\\s+confused)\\b").containsMatchIn(lower)
+                || rawText.contains("उलझन") -> NexExpression.CONFUSED
+
+            Regex("\\b(be\\s+shy|shy\\s+(face|eyes|expression)|look\\s+shy|sharmila)\\b").containsMatchIn(lower)
+                || rawText.contains("शर्मीला") -> NexExpression.SHY
+
+            Regex("\\b(wink|winking\\s+(eyes|face|expression)|wink\\s+at\\s+me|aankh\\s+maaro)\\b").containsMatchIn(lower)
+                || rawText.contains("आँख मारो") -> NexExpression.WINKING
+
+            Regex("\\b(gaming\\s+(eyes|face|mode|expression)|gamer\\s+(face|eyes|mode))\\b").containsMatchIn(lower) -> NexExpression.GAMING
+
+            Regex("\\b(be\\s+bored|bored\\s+(face|eyes|expression)|look\\s+bored)\\b").containsMatchIn(lower)
+                || rawText.contains("बोर चेहरा") -> NexExpression.BORED
+
+            Regex("\\b(be\\s+scared|scared\\s+(face|eyes|expression)|look\\s+scared|afraid\\s+eyes|dara\\s+hua)\\b").containsMatchIn(lower)
+                || rawText.contains("डरा हुआ") -> NexExpression.SCARED
+
+            Regex("\\b(be\\s+tired|tired\\s+(face|eyes|expression)|look\\s+tired|thaka\\s+hua)\\b").containsMatchIn(lower)
+                || rawText.contains("थका हुआ") -> NexExpression.TIRED
+
+            Regex("\\b(be\\s+proud|proud\\s+(face|eyes|expression)|look\\s+proud|garv\\s+dikhao)\\b").containsMatchIn(lower)
+                || rawText.contains("गर्व") -> NexExpression.PROUD
+
+            Regex("\\b(be\\s+suspicious|suspicious\\s+(face|eyes|expression)|look\\s+suspicious|shak\\s+wala)\\b").containsMatchIn(lower)
+                || rawText.contains("शक वाला") -> NexExpression.SUSPICIOUS
+
+            Regex("\\b(be\\s+focused|focused\\s+(face|eyes|expression|mode)|look\\s+focused|focus\\s+mode)\\b").containsMatchIn(lower)
+                || rawText.contains("ध्यान केंद्रित") -> NexExpression.FOCUSED
+
+            Regex("\\b(greeting\\s+(face|eyes|expression)|greet\\s+me|wave\\s+hello|namaste\\s+face)\\b").containsMatchIn(lower)
+                || rawText.contains("नमस्ते चेहरा") -> NexExpression.GREETING
 
             else -> null
         }

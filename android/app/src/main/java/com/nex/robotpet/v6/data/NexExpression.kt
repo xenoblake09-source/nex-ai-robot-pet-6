@@ -3,26 +3,44 @@ package com.nex.robotpet.v6.data
 import android.graphics.Color
 
 /**
- * All 17 required EMO-inspired robot eye expressions for NEX 6.0 (Part B).
- * Every expression renders smoothly offline at 60 FPS on [com.nex.robotpet.v6.ui.RobotEyesView].
+ * All 32 EMO-inspired robot eye expressions for NEX 6.0 (design-locked).
+ * Every expression uses the SAME square robot eye shape, size, position and glow identity —
+ * only scale, slant, colour and particle accents vary. Renders offline at 60 FPS on
+ * [com.nex.robotpet.v6.ui.RobotEyesView]. SLEEP is the "Sleeping" expression (kept for
+ * backward compatibility); SLEEPY is the distinct drowsy "Sleepy" expression.
  */
 enum class NexExpression(val displayName: String) {
+    NORMAL("Normal"),
+    BLINK("Blink"),
+    DOUBLE_BLINK("Double Blink"),
     HAPPY("Happy"),
+    VERY_HAPPY("Very Happy"),
     SAD("Sad"),
     ANGRY("Angry"),
-    SLEEP("Sleep"),
-    DANCE("Dance"),
-    BLINK("Blink"),
     SURPRISED("Surprised"),
+    SLEEPY("Sleepy"),
+    SLEEP("Sleeping"),
     THINKING("Thinking"),
     LISTENING("Listening"),
-    GAMING("Gaming"),
-    LAUGH("Laugh"),
-    CRY("Cry"),
-    LOVE("Love / Heart"),
-    CURIOUS("Curious"),
+    SPEAKING("Speaking"),
+    LAUGH("Laughing"),
+    CRY("Crying"),
+    LOVE("Love"),
+    HEART("Heart"),
     EXCITED("Excited"),
+    CURIOUS("Curious"),
     CONFUSED("Confused"),
+    SHY("Shy"),
+    WINKING("Winking"),
+    GAMING("Gaming"),
+    DANCE("Dancing"),
+    BORED("Bored"),
+    SCARED("Scared"),
+    TIRED("Tired"),
+    PROUD("Proud"),
+    SUSPICIOUS("Suspicious"),
+    FOCUSED("Focused"),
+    GREETING("Greeting"),
     CUSTOM("Custom");
 
     companion object {
@@ -30,8 +48,9 @@ enum class NexExpression(val displayName: String) {
             if (tag.isNullOrBlank()) return HAPPY
             val normalized = tag.trim().uppercase().replace('-', '_').replace(' ', '_')
             return when (normalized) {
-                "LOVE_HEART", "HEART", "HEARTS" -> LOVE
-                "SLEEPY", "SLEEPING" -> SLEEP
+                "LOVE_HEART" -> LOVE
+                "HEARTS" -> HEART
+                "SLEEPING" -> SLEEP
                 "DANCING" -> DANCE
                 "LAUGHING" -> LAUGH
                 "CRYING" -> CRY
@@ -39,6 +58,12 @@ enum class NexExpression(val displayName: String) {
                 "THINK" -> THINKING
                 "LISTEN" -> LISTENING
                 "SURPRISE" -> SURPRISED
+                "DOUBLEBLINK", "DOUBLE" -> DOUBLE_BLINK
+                "WINK" -> WINKING
+                "SPEAK" -> SPEAKING
+                "GREET", "HELLO" -> GREETING
+                "FOCUS" -> FOCUSED
+                "VERY_HAPPY_FACE" -> VERY_HAPPY
                 else -> entries.firstOrNull { it.name == normalized } ?: HAPPY
             }
         }
@@ -46,7 +71,7 @@ enum class NexExpression(val displayName: String) {
 }
 
 /**
- * User-configurable parameters for the 17th expression ([NexExpression.CUSTOM]).
+ * User-configurable parameters for the Custom expression ([NexExpression.CUSTOM]).
  */
 data class CustomEyeStyle(
     val colorArgb: Int = Color.parseColor("#00E5FF"),

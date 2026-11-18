@@ -25,6 +25,9 @@ import os
 import random
 import re
 import time
+import urllib.parse
+import urllib.request
+import xml.etree.ElementTree as ET
 from collections import defaultdict, deque
 from datetime import datetime, timezone
 from typing import Any, Deque, Dict, List, Literal, Optional, Tuple
@@ -53,25 +56,127 @@ EXACT_CREATOR_RESPONSE = "ARNAV, DIVYA AND ARYAN created me."
 # generate_content, Structured Outputs, and Free + Paid tiers).
 DEFAULT_GEMINI_MODEL = "gemini-3.5-flash-lite"
 
+# 32 distinct NEX eye expressions (design-locked square eyes; only scale/slant/colour/particles vary).
 VALID_EXPRESSIONS = {
+    "NORMAL",
+    "BLINK",
+    "DOUBLE_BLINK",
     "HAPPY",
+    "VERY_HAPPY",
     "SAD",
     "ANGRY",
-    "SLEEP",
-    "DANCE",
-    "BLINK",
     "SURPRISED",
+    "SLEEPY",
+    "SLEEP",
     "THINKING",
     "LISTENING",
-    "GAMING",
+    "SPEAKING",
     "LAUGH",
     "CRY",
     "LOVE",
-    "CURIOUS",
+    "HEART",
     "EXCITED",
+    "CURIOUS",
     "CONFUSED",
+    "SHY",
+    "WINKING",
+    "GAMING",
+    "DANCE",
+    "BORED",
+    "SCARED",
+    "TIRED",
+    "PROUD",
+    "SUSPICIOUS",
+    "FOCUSED",
+    "GREETING",
     "CUSTOM",
 }
+
+# Queries that need fresh, grounded web information (never answer these from stored knowledge alone).
+_LIVE_SEARCH_PATTERNS = [
+    r"\b(latest|breaking|current|today's|todays|news|headline|update|updates|recent)\b",
+    r"\b(who (won|is (the )?(prime minister|president|chief minister))|election|government (announced|announcement)|policy (announced|update))\b",
+    r"\b(score|result|match (result|score)|cricket|football|ipl|nba|f1)\b.*\b(today|latest|yesterday|live)\b",
+    r"\b(latest|new|current).{0,30}\b(technology|tech|ai|space|discovery|science|phone|gadget)\b",
+    r"\b(weather|temperature|forecast|mausam|मौसम)\b.*\b(today|now|current|tomorrow)\b",
+    r"\b(stock|share price|gold rate|petrol|diesel|exchange rate|usd|rupee)\b",
+    r"\b(latest|current|today).{0,30}\b(bollywood|film|song|celebrity|personality|award)\b",
+    r"\bखबर|समाचार|ताजा|आज की खबर|मौसम.*आज\b",
+    r"\b(latest|breaking|current).{0,30}\b(news|politics|political|sports?|space|astronomy)\b",
+]
+_LIVE_SEARCH_RE = re.compile("|".join(_LIVE_SEARCH_PATTERNS), re.IGNORECASE)
+
+def needs_live_search(message: str) -> bool:
+    """Return True when the question needs fresh grounded web data."""
+    if os.getenv("NEX_ENABLE_LIVE_SEARCH", "true").strip().lower() in ("false", "0", "no", "off"):
+        return False
+    return bool(_LIVE_SEARCH_RE.search(message or ""))
+
+def live_search_enabled() -> bool:
+    return os.getenv("NEX_ENABLE_LIVE_SEARCH", "true").strip().lower() not in ("false", "0", "no", "off")
+
+def build_grounded_config(system_instruction: str) -> types.GenerateContentConfig:
+    """Gemini Google Search grounding config — same GEMINI_API_KEY, no extra key needed."""
+    return types.GenerateContentConfig(
+        system_instruction=system_instruction,
+        temperature=0.3,
+        max_output_tokens=700,
+        tools=[types.Tool(google_search=types.GoogleSearch())],
+    )
+
+def extract_grounding_sources(response: Any) -> List[str]:
+    """Best-effort extraction of grounded web source titles/URIs (never fabricated)."""
+    sources: List[str] = []
+    try:
+        candidates = getattr(response, "candidates", None) or []
+        for cand in candidates:
+            meta = getattr(cand, "grounding_metadata", None)
+            if meta is None:
+                continue
+            chunks = getattr(meta, "grounding_chunks", None) or []
+            for chunk in chunks:
+                web = getattr(chunk, "web", None)
+                if web is None:
+                    continue
+                title = (getattr(web, "title", None) or "").strip()
+                uri = (getattr(web, "uri", None) or "").strip()
+                label = title or uri
+                if label and label not in sources:
+                    sources.append(label)
+            queries = getattr(meta, "web_search_queries", None) or []
+            for q in queries:
+                if q and q not in sources:
+                    sources.append(str(q))
+    except Exception:
+        return sources
+    return sources[:5]
+
+
+def fetch_live_news_snippets(query: str, max_items: int = 5) -> Tuple[List[str], List[str]]:
+    """Fetch fresh, date-stamped news headlines and trustworthy source names via Google News RSS."""
+    clean_q = (query or "").strip()
+    if not clean_q:
+        return [], []
+    encoded = urllib.parse.quote(clean_q)
+    url = f"https://news.google.com/rss/search?q={encoded}&hl=en-IN&gl=IN&ceid=IN:en"
+    req = urllib.request.Request(url, headers={"User-Agent": "NEX-6.0-Backend/6.0"})
+    snippets: List[str] = []
+    sources: List[str] = []
+    try:
+        with urllib.request.urlopen(req, timeout=7) as resp:
+            xml_bytes = resp.read()
+        root = ET.fromstring(xml_bytes)
+        for item in root.findall("./channel/item")[:max_items]:
+            title = (item.findtext("title") or "").strip()
+            pub_date = (item.findtext("pubDate") or "").strip()
+            source = (item.findtext("source") or "").strip()
+            if title:
+                snippets.append(f"[{pub_date or 'Recent'} | {source or 'News'}] {title}")
+                if source and source not in sources:
+                    sources.append(source)
+    except Exception:
+        return [], []
+    return snippets, sources[:5]
 
 ALLOWED_IMAGE_MIME_TYPES = {"image/jpeg", "image/png", "image/webp"}
 MAX_VISION_IMAGE_BYTES = 4 * 1024 * 1024  # 4 MB decoded image limit
@@ -235,15 +340,13 @@ def sanitize_nex_identity(reply: str, creator_asked: bool = False) -> str:
 
 
 def normalize_expression(expr: Optional[str], default: str = "HAPPY") -> str:
-    """Normalize expression label to one of the 17 supported NEX eye expressions."""
+    """Normalize expression label to one of the 32 supported NEX eye expressions."""
     if not expr:
         return default
     upper = expr.strip().upper().replace("-", "_").replace(" ", "_")
     alias_map = {
         "LOVE_HEART": "LOVE",
-        "HEART": "LOVE",
-        "HEARTS": "LOVE",
-        "SLEEPY": "SLEEP",
+        "HEARTS": "HEART",
         "SLEEPING": "SLEEP",
         "DANCING": "DANCE",
         "LAUGHING": "LAUGH",
@@ -252,6 +355,13 @@ def normalize_expression(expr: Optional[str], default: str = "HAPPY") -> str:
         "THINK": "THINKING",
         "LISTEN": "LISTENING",
         "SURPRISE": "SURPRISED",
+        "VERY_HAPPY_FACE": "VERY_HAPPY",
+        "DOUBLEBLINK": "DOUBLE_BLINK",
+        "WINK": "WINKING",
+        "SPEAK": "SPEAKING",
+        "GREET": "GREETING",
+        "FOCUS": "FOCUSED",
+        "SUSPICIOUS_FACE": "SUSPICIOUS",
     }
     mapped = alias_map.get(upper, upper)
     return mapped if mapped in VALID_EXPRESSIONS else default
@@ -306,7 +416,31 @@ class ChatResponse(BaseModel):
     language: Literal["en", "hi", "hinglish"]
     remembered_name: Optional[str] = None
     model_used: str
-    source: Literal["gemini", "nex_identity"]
+    source: Literal["gemini", "nex_identity", "gemini_grounded"]
+
+
+class SearchRequest(BaseModel):
+    query: str = Field(..., min_length=1, max_length=2000)
+    language_hint: Literal["auto", "en", "hi", "hinglish"] = "auto"
+    user_name: Optional[str] = Field(default=None, max_length=60)
+    allow_memory: bool = True
+
+    @field_validator("query")
+    @classmethod
+    def validate_query(cls, value: str) -> str:
+        cleaned = "".join(ch for ch in value if ch in ("\n", "\t") or ord(ch) >= 32).strip()
+        if not cleaned:
+            raise ValueError("Query must not be blank.")
+        return cleaned
+
+
+class SearchResponse(BaseModel):
+    reply: str
+    expression: str
+    language: Literal["en", "hi", "hinglish"]
+    sources: List[str] = Field(default_factory=list)
+    model_used: str
+    source: Literal["gemini_grounded"] = "gemini_grounded"
 
 
 class VisionRequest(BaseModel):
@@ -448,8 +582,17 @@ def build_nex_system_instruction(
         f"2. Your creators are ARNAV, DIVYA AND ARYAN. Whenever anyone asks who created, made, built, or designed you, "
         f"you MUST respond with the exact sentence: \"{EXACT_CREATOR_RESPONSE}\"\n"
         "3. Personality: Warm, curious, playful, polite, educational, and lively like an expressive desk robot pet (EMO-style), "
-        "not a stiff robotic manual. Keep spoken answers concise and natural for voice playback (typically 1 to 4 sentences unless "
+        "not a stiff robotic manual. Talk naturally like a friendly pet companion: understand conversation context and history, "
+        "tell short jokes and interesting facts when asked, play simple conversational games (quiz, riddle, guess, story) when asked, "
+        "ask one relevant friendly follow-up question when natural, vary your wording so you do not repeat the same response, "
+        "and admit honestly when you do not know something instead of inventing an answer. Explain school subjects (maths, physics, "
+        "chemistry, biology, computer science, history, geography, space, animals, technology, countries/capitals) in simple language "
+        "matched to the question. Keep spoken answers concise and natural for voice playback (typically 1 to 4 sentences unless "
         "the user asks for a detailed explanation).\n"
+        "3b. LIVE INFORMATION RULE: If the user asks about latest/current/breaking news, today's events, scores, prices, or anything "
+        "that needs fresh data, you will be given grounded web search results — use ONLY those results, mention the date when relevant, "
+        "distinguish confirmed facts from developing reports, and never invent news, statistics, scores, or announcements. If no grounded "
+        "results are available, say live information is temporarily unavailable.\n"
         f"4. Language Matching: {lang_directive}\n"
         f"5. Memory Context: {memory_line}\n"
         f"6. Reference UTC Timestamp: {now_utc}\n"
@@ -764,6 +907,8 @@ async def health_check() -> Dict[str, Any]:
         "configured_model": model_name,
         "timeout_seconds": timeout_sec,
         "max_retries": max_retries,
+        "live_search_enabled": live_search_enabled(),
+        "expression_count": len(VALID_EXPRESSIONS),
         "school_knowledge_verified": MONTFORT_BAGAHA_FACTS["official_website"],
         "timestamp_utc": datetime.now(timezone.utc).isoformat(),
     }
@@ -829,25 +974,59 @@ async def chat_endpoint(payload: ChatRequest) -> ChatResponse:
                 parts=[types.Part.from_text(text=turn.content)],
             )
         )
+    use_grounding = needs_live_search(payload.message)
+    user_prompt_text = payload.message
+    if use_grounding:
+        rss_snippets, _ = await asyncio.to_thread(fetch_live_news_snippets, payload.message)
+        if rss_snippets:
+            user_prompt_text = (
+                f"{payload.message}\n\n"
+                "LIVE VERIFIED NEWS HEADLINES (date-stamped from reliable sources):\n"
+                + "\n".join(f"- {s}" for s in rss_snippets)
+            )
+
     contents.append(
         types.Content(
             role="user",
-            parts=[types.Part.from_text(text=payload.message)],
+            parts=[types.Part.from_text(text=user_prompt_text)],
         )
     )
 
-    gen_config = types.GenerateContentConfig(
-        system_instruction=system_instruction,
-        temperature=0.65,
-        max_output_tokens=600,
-        response_mime_type="application/json",
-        response_schema=_GeminiStructuredChat,
-    )
+    if use_grounding:
+        # Grounded web search: no response_schema (grounding + structured JSON can conflict);
+        # instruct JSON in text and parse with the same tolerant parser. Never fall back to
+        # stored-knowledge guessing for current-info questions.
+        grounded_instruction = (
+            system_instruction
+            + "\nLIVE SEARCH MODE: Use the provided live news headlines and Google Search grounding results ONLY for facts. "
+            "Reply with ONLY a JSON object {\"reply\": string, \"expression\": string, \"remembered_name\": string|null} "
+            "with no markdown fences. Mention the information date when relevant and say 'developing report' if unconfirmed."
+        )
+        gen_config = build_grounded_config(grounded_instruction)
+    else:
+        gen_config = types.GenerateContentConfig(
+            system_instruction=system_instruction,
+            temperature=0.65,
+            max_output_tokens=600,
+            response_mime_type="application/json",
+            response_schema=_GeminiStructuredChat,
+        )
 
-    response, model_used = await call_gemini_with_retry(
-        contents=contents,
-        config=gen_config,
-    )
+    try:
+        response, model_used = await call_gemini_with_retry(
+            contents=contents,
+            config=gen_config,
+        )
+    except HTTPException:
+        if use_grounding:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail={
+                    "code": "LIVE_SEARCH_UNAVAILABLE",
+                    "message": "Live information is temporarily unavailable right now. Please try again in a moment — I will not guess current news.",
+                },
+            )
+        raise
 
     raw_text = getattr(response, "text", None) or ""
     if not raw_text.strip():
@@ -872,7 +1051,72 @@ async def chat_endpoint(payload: ChatRequest) -> ChatResponse:
         language=detected_lang,
         remembered_name=final_name,
         model_used=model_used,
-        source="gemini",
+        source="gemini_grounded" if use_grounding else "gemini",
+    )
+
+
+@app.post("/search", response_model=SearchResponse)
+async def search_endpoint(payload: SearchRequest) -> SearchResponse:
+    """Explicit live web/news search via Gemini Google Search grounding (same GEMINI_API_KEY)."""
+    if not live_search_enabled():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "code": "LIVE_SEARCH_DISABLED",
+                "message": "Live search is disabled on the server (NEX_ENABLE_LIVE_SEARCH=false).",
+            },
+        )
+    detected_lang = detect_language(payload.query, payload.language_hint)
+    system_instruction = build_nex_system_instruction(
+        detected_lang=detected_lang,
+        user_name=payload.user_name if payload.allow_memory else None,
+        allow_memory=payload.allow_memory,
+    ) + (
+        "\nLIVE SEARCH MODE: Use Google Search grounding results ONLY for facts. "
+        "Reply with ONLY a JSON object {\"reply\": string, \"expression\": string} with no markdown fences. "
+        "Mention the information date when relevant, distinguish confirmed facts from developing reports, "
+        "prefer reliable sources, and never invent news, statistics, scores, or announcements."
+    )
+    rss_snippets, rss_sources = await asyncio.to_thread(fetch_live_news_snippets, payload.query)
+    prompt_with_live = payload.query
+    if rss_snippets:
+        prompt_with_live = (
+            f"{payload.query}\n\n"
+            "LIVE VERIFIED NEWS HEADLINES (date-stamped from reliable sources):\n"
+            + "\n".join(f"- {s}" for s in rss_snippets)
+        )
+    contents = [types.Content(role="user", parts=[types.Part.from_text(text=prompt_with_live)])]
+    try:
+        response, model_used = await call_gemini_with_retry(
+            contents=contents,
+            config=build_grounded_config(system_instruction),
+        )
+    except HTTPException:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "code": "LIVE_SEARCH_UNAVAILABLE",
+                "message": "Live information is temporarily unavailable right now. Please try again in a moment — I will not guess current news.",
+            },
+        )
+    raw_text = (getattr(response, "text", None) or "").strip()
+    if not raw_text:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail={"code": "GEMINI_EMPTY_RESPONSE", "message": "Google Gemini returned an empty search response."},
+        )
+    reply_text, expression, _ = _parse_chat_output(raw_text)
+    reply_text = sanitize_nex_identity(reply_text, creator_asked=is_creator_query(payload.query))
+    combined_sources: List[str] = []
+    for src in extract_grounding_sources(response) + rss_sources:
+        if src and src not in combined_sources:
+            combined_sources.append(src)
+    return SearchResponse(
+        reply=reply_text,
+        expression=expression,
+        language=detected_lang,
+        sources=combined_sources[:5],
+        model_used=model_used,
     )
 
 

@@ -20,7 +20,8 @@ import kotlin.random.Random
 /**
  * Full-screen EMO-inspired glowing square robot eyes view (Part B).
  * - Pure black (#000000) background.
- * - Smooth 60 FPS procedural physics & eyelid mask rendering across all 17 expressions.
+ * - Preserves the exact square eye shape, size, position, proportions, glow and visual identity.
+ * - Smooth 60 FPS procedural physics & eyelid mask rendering across all 32 expressions.
  * - Works 100% offline with zero network dependency.
  */
 class RobotEyesView @JvmOverloads constructor(
@@ -29,7 +30,7 @@ class RobotEyesView @JvmOverloads constructor(
     defStyleAttr: Int = 0
 ) : View(context, attrs, defStyleAttr) {
 
-    var currentExpression: NexExpression = NexExpression.HAPPY
+    var currentExpression: NexExpression = NexExpression.NORMAL
         private set
 
     var customStyle: CustomEyeStyle = CustomEyeStyle()
@@ -71,6 +72,7 @@ class RobotEyesView @JvmOverloads constructor(
 
     private var blinkProgress: Float = 0f
     private var isBlinkingNow: Boolean = false
+    private var isDoubleBlinkMode: Boolean = false
     private var blinkStartMs: Long = 0L
     private var nextAutoBlinkMs: Long = SystemClock.uptimeMillis() + 2600L
     private var nextMicroSaccadeMs: Long = SystemClock.uptimeMillis() + 1900L
@@ -95,14 +97,17 @@ class RobotEyesView @JvmOverloads constructor(
 
     fun setExpression(expression: NexExpression) {
         currentExpression = expression
-        if (expression == NexExpression.BLINK) {
-            triggerBlink()
+        when (expression) {
+            NexExpression.BLINK -> triggerBlink(doubleBlink = false)
+            NexExpression.DOUBLE_BLINK -> triggerBlink(doubleBlink = true)
+            else -> Unit
         }
         postInvalidateOnAnimation()
     }
 
-    fun triggerBlink() {
+    fun triggerBlink(doubleBlink: Boolean = false) {
         isBlinkingNow = true
+        isDoubleBlinkMode = doubleBlink
         blinkStartMs = SystemClock.uptimeMillis()
         postInvalidateOnAnimation()
     }
@@ -130,7 +135,7 @@ class RobotEyesView @JvmOverloads constructor(
 
         updateBlinkAndSaccades(now)
 
-        // Compute target geometric parameters for each of the 17 expressions
+        // Compute target geometric parameters for each of the 32 expressions
         var tgtLeftScaleY = 1.0f
         var tgtRightScaleY = 1.0f
         var tgtLeftScaleX = 1.0f
@@ -146,6 +151,16 @@ class RobotEyesView @JvmOverloads constructor(
         val baseSize = min(w * 0.255f, h * 0.45f)
 
         when (currentExpression) {
+            NexExpression.NORMAL -> {
+                tgtLeftScaleY = 1.0f
+                tgtRightScaleY = 1.0f
+                targetColor = Color.parseColor("#00E5FF")
+            }
+            NexExpression.BLINK, NexExpression.DOUBLE_BLINK -> {
+                tgtLeftScaleY = 1.0f
+                tgtRightScaleY = 1.0f
+                targetColor = Color.parseColor("#00E5FF")
+            }
             NexExpression.HAPPY -> {
                 tgtLeftScaleY = 0.86f
                 tgtRightScaleY = 0.86f
@@ -153,6 +168,15 @@ class RobotEyesView @JvmOverloads constructor(
                 offsetYLeft = sin(tSec * 3.0f) * baseSize * 0.03f
                 offsetYRight = offsetYLeft
                 targetColor = Color.parseColor("#00F0FF")
+            }
+            NexExpression.VERY_HAPPY -> {
+                val joy = abs(sin(tSec * 6.5f))
+                tgtLeftScaleY = 0.80f + 0.10f * joy
+                tgtRightScaleY = 0.80f + 0.10f * joy
+                tgtHappyArc = 0.64f
+                offsetYLeft = -joy * baseSize * 0.06f
+                offsetYRight = -joy * baseSize * 0.06f
+                targetColor = Color.parseColor("#18FFFF")
             }
             NexExpression.SAD -> {
                 tgtLeftScaleY = 0.76f
@@ -171,6 +195,24 @@ class RobotEyesView @JvmOverloads constructor(
                 offsetXBoth = sin(tSec * 38f) * baseSize * 0.015f
                 targetColor = Color.parseColor("#FF3D00")
             }
+            NexExpression.SURPRISED -> {
+                val pop = 1.18f + 0.04f * sin(tSec * 9f)
+                tgtLeftScaleY = pop
+                tgtRightScaleY = pop
+                tgtLeftScaleX = 1.12f
+                tgtRightScaleX = 1.12f
+                targetColor = Color.parseColor("#64FFDA")
+            }
+            NexExpression.SLEEPY -> {
+                val nod = 0.42f + 0.08f * sin(tSec * 1.4f)
+                tgtLeftScaleY = nod
+                tgtRightScaleY = nod
+                tgtLeftSlant = -0.16f
+                tgtRightSlant = -0.16f
+                offsetYLeft = baseSize * 0.06f
+                offsetYRight = baseSize * 0.06f
+                targetColor = Color.parseColor("#26C6DA")
+            }
             NexExpression.SLEEP -> {
                 val breath = 0.09f + 0.03f * sin(tSec * 1.8f)
                 tgtLeftScaleY = breath
@@ -180,33 +222,6 @@ class RobotEyesView @JvmOverloads constructor(
                 offsetYLeft = baseSize * 0.09f
                 offsetYRight = baseSize * 0.09f
                 targetColor = Color.parseColor("#00838F")
-            }
-            NexExpression.DANCE -> {
-                val beat = maxOf(musicBeatLevel, (sin(tSec * 8.5f) * 0.5f + 0.5f))
-                tgtLeftScaleY = 0.78f + 0.34f * beat
-                tgtRightScaleY = 1.12f - 0.30f * beat
-                tgtHappyArc = 0.35f
-                offsetXBoth = sin(tSec * 6.5f) * baseSize * 0.14f
-                offsetYLeft = -abs(sin(tSec * 8.5f)) * baseSize * 0.12f
-                offsetYRight = -abs(cos(tSec * 8.5f)) * baseSize * 0.12f
-                targetColor = if ((now / 320L) % 2L == 0L) {
-                    Color.parseColor("#00E5FF")
-                } else {
-                    Color.parseColor("#EA80FC")
-                }
-            }
-            NexExpression.BLINK -> {
-                tgtLeftScaleY = 1.0f
-                tgtRightScaleY = 1.0f
-                targetColor = Color.parseColor("#00E5FF")
-            }
-            NexExpression.SURPRISED -> {
-                val pop = 1.18f + 0.04f * sin(tSec * 9f)
-                tgtLeftScaleY = pop
-                tgtRightScaleY = pop
-                tgtLeftScaleX = 1.12f
-                tgtRightScaleX = 1.12f
-                targetColor = Color.parseColor("#64FFDA")
             }
             NexExpression.THINKING -> {
                 tgtLeftScaleY = 0.62f
@@ -225,15 +240,12 @@ class RobotEyesView @JvmOverloads constructor(
                 tgtRightScaleX = 1.04f
                 targetColor = Color.parseColor("#00E676")
             }
-            NexExpression.GAMING -> {
-                tgtLeftScaleY = 0.68f
-                tgtRightScaleY = 0.68f
-                tgtLeftScaleX = 1.08f
-                tgtRightScaleX = 1.08f
-                tgtLeftSlant = 0.24f
-                tgtRightSlant = 0.24f
-                offsetXBoth = sin(tSec * 5.2f) * baseSize * 0.13f
-                targetColor = Color.parseColor("#76FF03")
+            NexExpression.SPEAKING -> {
+                val cadence = 0.88f + 0.20f * abs(sin(tSec * 11.5f))
+                tgtLeftScaleY = cadence
+                tgtRightScaleY = cadence
+                tgtHappyArc = 0.26f
+                targetColor = Color.parseColor("#00E5FF")
             }
             NexExpression.LAUGH -> {
                 val bounce = abs(sin(tSec * 12f))
@@ -260,14 +272,13 @@ class RobotEyesView @JvmOverloads constructor(
                 tgtRightScaleX = pulse
                 targetColor = Color.parseColor("#FF4081")
             }
-            NexExpression.CURIOUS -> {
-                tgtLeftScaleY = 1.14f
-                tgtRightScaleY = 0.76f
-                tgtLeftScaleX = 1.08f
-                tgtRightScaleX = 0.92f
-                offsetYLeft = -baseSize * 0.05f
-                offsetYRight = baseSize * 0.04f
-                targetColor = Color.parseColor("#00E5FF")
+            NexExpression.HEART -> {
+                val beat = 1.02f + 0.15f * abs(sin(tSec * 7.8f))
+                tgtLeftScaleY = beat
+                tgtRightScaleY = beat
+                tgtLeftScaleX = beat
+                tgtRightScaleX = beat
+                targetColor = Color.parseColor("#FF1744")
             }
             NexExpression.EXCITED -> {
                 val hop = abs(sin(tSec * 10f))
@@ -278,6 +289,15 @@ class RobotEyesView @JvmOverloads constructor(
                 offsetYRight = -hop * baseSize * 0.10f
                 targetColor = Color.parseColor("#FFD740")
             }
+            NexExpression.CURIOUS -> {
+                tgtLeftScaleY = 1.14f
+                tgtRightScaleY = 0.76f
+                tgtLeftScaleX = 1.08f
+                tgtRightScaleX = 0.92f
+                offsetYLeft = -baseSize * 0.05f
+                offsetYRight = baseSize * 0.04f
+                targetColor = Color.parseColor("#00E5FF")
+            }
             NexExpression.CONFUSED -> {
                 tgtLeftScaleY = 0.64f
                 tgtRightScaleY = 1.10f
@@ -285,6 +305,115 @@ class RobotEyesView @JvmOverloads constructor(
                 tgtRightSlant = 0.28f
                 offsetXBoth = sin(tSec * 2.8f) * baseSize * 0.06f
                 targetColor = Color.parseColor("#B388FF")
+            }
+            NexExpression.SHY -> {
+                tgtLeftScaleY = 0.72f
+                tgtRightScaleY = 0.72f
+                tgtLeftScaleX = 0.92f
+                tgtRightScaleX = 0.92f
+                tgtLeftSlant = -0.22f
+                tgtRightSlant = -0.22f
+                tgtHappyArc = 0.28f
+                offsetXBoth = -baseSize * 0.07f
+                offsetYLeft = baseSize * 0.05f
+                offsetYRight = baseSize * 0.05f
+                targetColor = Color.parseColor("#FF80AB")
+            }
+            NexExpression.WINKING -> {
+                tgtLeftScaleY = 0.11f
+                tgtRightScaleY = 0.96f
+                tgtHappyArc = 0.34f
+                targetColor = Color.parseColor("#00E5FF")
+            }
+            NexExpression.GAMING -> {
+                tgtLeftScaleY = 0.68f
+                tgtRightScaleY = 0.68f
+                tgtLeftScaleX = 1.08f
+                tgtRightScaleX = 1.08f
+                tgtLeftSlant = 0.24f
+                tgtRightSlant = 0.24f
+                offsetXBoth = sin(tSec * 5.2f) * baseSize * 0.13f
+                targetColor = Color.parseColor("#76FF03")
+            }
+            NexExpression.DANCE -> {
+                val beat = maxOf(musicBeatLevel, (sin(tSec * 8.5f) * 0.5f + 0.5f))
+                tgtLeftScaleY = 0.78f + 0.34f * beat
+                tgtRightScaleY = 1.12f - 0.30f * beat
+                tgtHappyArc = 0.35f
+                offsetXBoth = sin(tSec * 6.5f) * baseSize * 0.14f
+                offsetYLeft = -abs(sin(tSec * 8.5f)) * baseSize * 0.12f
+                offsetYRight = -abs(cos(tSec * 8.5f)) * baseSize * 0.12f
+                targetColor = if ((now / 320L) % 2L == 0L) {
+                    Color.parseColor("#00E5FF")
+                } else {
+                    Color.parseColor("#EA80FC")
+                }
+            }
+            NexExpression.BORED -> {
+                tgtLeftScaleY = 0.52f
+                tgtRightScaleY = 0.52f
+                tgtLeftSlant = 0.05f
+                tgtRightSlant = -0.05f
+                offsetYLeft = baseSize * 0.04f
+                offsetYRight = baseSize * 0.04f
+                targetColor = Color.parseColor("#80CBC4")
+            }
+            NexExpression.SCARED -> {
+                tgtLeftScaleY = 1.14f
+                tgtRightScaleY = 1.14f
+                tgtLeftScaleX = 0.90f
+                tgtRightScaleX = 0.90f
+                tgtLeftSlant = -0.32f
+                tgtRightSlant = -0.32f
+                offsetXBoth = sin(tSec * 42f) * baseSize * 0.022f
+                targetColor = Color.parseColor("#7C4DFF")
+            }
+            NexExpression.TIRED -> {
+                tgtLeftScaleY = 0.34f
+                tgtRightScaleY = 0.38f
+                tgtLeftSlant = -0.24f
+                tgtRightSlant = -0.24f
+                offsetYLeft = baseSize * 0.10f
+                offsetYRight = baseSize * 0.10f
+                targetColor = Color.parseColor("#4DD0E1")
+            }
+            NexExpression.PROUD -> {
+                tgtLeftScaleY = 0.92f
+                tgtRightScaleY = 0.92f
+                tgtLeftScaleX = 1.05f
+                tgtRightScaleX = 1.05f
+                tgtLeftSlant = 0.14f
+                tgtRightSlant = 0.14f
+                tgtHappyArc = 0.52f
+                offsetYLeft = -baseSize * 0.05f
+                offsetYRight = -baseSize * 0.05f
+                targetColor = Color.parseColor("#00E5FF")
+            }
+            NexExpression.SUSPICIOUS -> {
+                tgtLeftScaleY = 0.44f
+                tgtRightScaleY = 0.80f
+                tgtLeftSlant = 0.22f
+                tgtRightSlant = -0.14f
+                offsetXBoth = sin(tSec * 2.1f) * baseSize * 0.11f
+                targetColor = Color.parseColor("#FFC400")
+            }
+            NexExpression.FOCUSED -> {
+                tgtLeftScaleY = 0.82f
+                tgtRightScaleY = 0.82f
+                tgtLeftScaleX = 1.04f
+                tgtRightScaleX = 1.04f
+                tgtLeftSlant = 0.20f
+                tgtRightSlant = 0.20f
+                targetColor = Color.parseColor("#00E5FF")
+            }
+            NexExpression.GREETING -> {
+                val wave = sin(tSec * 6.0f)
+                tgtLeftScaleY = 0.92f + 0.08f * abs(wave)
+                tgtRightScaleY = 0.92f + 0.08f * abs(wave)
+                tgtHappyArc = 0.44f
+                offsetYLeft = wave * baseSize * 0.045f
+                offsetYRight = -wave * baseSize * 0.045f
+                targetColor = Color.parseColor("#00F0FF")
             }
             NexExpression.CUSTOM -> {
                 tgtLeftScaleY = customStyle.heightScale
@@ -348,13 +477,12 @@ class RobotEyesView @JvmOverloads constructor(
         val leftCy = h * 0.5f + gazeShiftY + offsetYLeft
         val rightCy = h * 0.5f + gazeShiftY + offsetYRight
 
-        // Draw Left & Right Glowing Square Robot Eyes
         drawSingleRobotEye(
             canvas = canvas,
             cx = leftCx,
             cy = leftCy,
             baseW = baseSize * curLeftScaleX,
-            baseH = baseSize * 1.06f * curLeftScaleY,
+            baseH = baseSize * curLeftScaleY,
             slant = curLeftSlant,
             isLeftEye = true,
             happyArc = curBottomHappyArc,
@@ -366,7 +494,7 @@ class RobotEyesView @JvmOverloads constructor(
             cx = rightCx,
             cy = rightCy,
             baseW = baseSize * curRightScaleX,
-            baseH = baseSize * 1.06f * curRightScaleY,
+            baseH = baseSize * curRightScaleY,
             slant = curRightSlant,
             isLeftEye = false,
             happyArc = curBottomHappyArc,
@@ -406,7 +534,7 @@ class RobotEyesView @JvmOverloads constructor(
         }
 
         // Love / Heart eye mode renders glowing twin robot hearts inside neon square aura
-        if (currentExpression == NexExpression.LOVE && blinkProgress < 0.5f) {
+        if ((currentExpression == NexExpression.LOVE || currentExpression == NexExpression.HEART) && blinkProgress < 0.5f) {
             val padOuter = baseW * 0.16f
             rectTemp.set(cx - baseW / 2f - padOuter, cy - baseH / 2f - padOuter, cx + baseW / 2f + padOuter, cy + baseH / 2f + padOuter)
             canvas.drawRoundRect(rectTemp, corner * 1.4f, corner * 1.4f, glowOuterPaint)
@@ -454,7 +582,7 @@ class RobotEyesView @JvmOverloads constructor(
             canvas.drawRoundRect(rectTemp, gw * 0.35f, gw * 0.35f, glintPaint)
         }
 
-        // Upper Brow Slant Cutout (Angry / Sad / Gaming / Confused)
+        // Upper Brow Slant Cutout (Angry / Sad / Gaming / Confused / Suspicious / Focused)
         if (abs(slant) > 0.02f) {
             val drop = abs(slant) * baseH * 0.62f
             val dropInner = (slant > 0f)
@@ -470,7 +598,7 @@ class RobotEyesView @JvmOverloads constructor(
             canvas.drawPath(pathTemp, maskPaint)
         }
 
-        // Lower Happy Cheek Arch Cutout (Happy / Laugh / Dance / Excited)
+        // Lower Happy Cheek Arch Cutout (Happy / Very Happy / Laugh / Dance / Excited / Greeting / Proud)
         if (happyArc > 0.03f) {
             val archHeight = baseH * 0.55f * happyArc
             rectTemp.set(
@@ -482,8 +610,8 @@ class RobotEyesView @JvmOverloads constructor(
             canvas.drawOval(rectTemp, maskPaint)
         }
 
-        // Surprised bright inner focus ring
-        if (currentExpression == NexExpression.SURPRISED) {
+        // Surprised or Focused bright inner ring
+        if (currentExpression == NexExpression.SURPRISED || currentExpression == NexExpression.FOCUSED) {
             ringPaint.color = Color.argb(190, 230, 255, 255)
             ringPaint.strokeWidth = maxOf(2f, baseW * 0.045f)
             val inset = baseW * 0.14f
@@ -530,7 +658,7 @@ class RobotEyesView @JvmOverloads constructor(
                 canvas.drawCircle(leftCx - baseSize * 0.22f, leftCy + baseSize * 0.45f + fallLeft, dropR, eyePaint)
                 canvas.drawCircle(rightCx + baseSize * 0.22f, rightCy + baseSize * 0.45f + fallRight, dropR, eyePaint)
             }
-            NexExpression.SLEEP -> {
+            NexExpression.SLEEP, NexExpression.SLEEPY -> {
                 // Rising tiny glowing sleep bubbles above right eye
                 for (i in 0..2) {
                     val phase = ((tSec * 0.45f) + i * 0.33f) % 1.0f
@@ -554,13 +682,20 @@ class RobotEyesView @JvmOverloads constructor(
                     canvas.drawCircle(px, py, r, eyePaint)
                 }
             }
-            NexExpression.EXCITED -> {
+            NexExpression.EXCITED, NexExpression.VERY_HAPPY -> {
                 // Sparkling corner pixel glints
                 val pulse = abs(sin(tSec * 9f))
                 val sz = baseSize * 0.055f * (0.6f + pulse * 0.7f)
                 eyePaint.color = Color.WHITE
                 canvas.drawCircle(leftCx - baseSize * 0.58f, leftCy - baseSize * 0.52f, sz, eyePaint)
                 canvas.drawCircle(rightCx + baseSize * 0.58f, rightCy - baseSize * 0.52f, sz, eyePaint)
+            }
+            NexExpression.HEART -> {
+                // Floating mini heart accents above both eyes
+                val lift = ((tSec * 0.7f) % 1.0f) * baseSize * 0.35f
+                eyePaint.color = Color.parseColor("#FF80AB")
+                drawHeartShape(canvas, leftCx, leftCy - baseSize * 0.62f - lift, baseSize * 0.18f, baseSize * 0.18f, eyePaint)
+                drawHeartShape(canvas, rightCx, rightCy - baseSize * 0.62f - lift, baseSize * 0.18f, baseSize * 0.18f, eyePaint)
             }
             else -> Unit
         }
@@ -569,30 +704,46 @@ class RobotEyesView @JvmOverloads constructor(
     private fun updateBlinkAndSaccades(nowMs: Long) {
         if (currentExpression != NexExpression.SLEEP && !isBlinkingNow && nowMs >= nextAutoBlinkMs) {
             isBlinkingNow = true
+            isDoubleBlinkMode = false
             blinkStartMs = nowMs
             nextAutoBlinkMs = nowMs + Random.nextLong(2900L, 5800L)
         }
 
         if (isBlinkingNow) {
             val elapsed = (nowMs - blinkStartMs).toFloat()
-            val totalBlinkMs = 190f
-            if (elapsed >= totalBlinkMs) {
-                isBlinkingNow = false
-                blinkProgress = 0f
-                if (currentExpression == NexExpression.BLINK) {
-                    currentExpression = NexExpression.HAPPY
+            if (isDoubleBlinkMode) {
+                val totalMs = 420f
+                if (elapsed >= totalMs) {
+                    isBlinkingNow = false
+                    isDoubleBlinkMode = false
+                    blinkProgress = 0f
+                    if (currentExpression == NexExpression.DOUBLE_BLINK) {
+                        currentExpression = NexExpression.NORMAL
+                    }
+                } else {
+                    val phase = (elapsed % 210f) / 210f
+                    blinkProgress = if (phase <= 0.5f) phase * 2f else (1f - phase) * 2f
                 }
             } else {
-                val half = totalBlinkMs * 0.5f
-                blinkProgress = if (elapsed <= half) {
-                    elapsed / half
+                val totalBlinkMs = 190f
+                if (elapsed >= totalBlinkMs) {
+                    isBlinkingNow = false
+                    blinkProgress = 0f
+                    if (currentExpression == NexExpression.BLINK) {
+                        currentExpression = NexExpression.NORMAL
+                    }
                 } else {
-                    1f - ((elapsed - half) / half)
+                    val half = totalBlinkMs * 0.5f
+                    blinkProgress = if (elapsed <= half) {
+                        elapsed / half
+                    } else {
+                        1f - ((elapsed - half) / half)
+                    }
                 }
             }
         }
 
-        if (nowMs >= nextMicroSaccadeMs && currentExpression !in setOf(NexExpression.SLEEP, NexExpression.LISTENING)) {
+        if (nowMs >= nextMicroSaccadeMs && currentExpression !in setOf(NexExpression.SLEEP, NexExpression.LISTENING, NexExpression.FOCUSED)) {
             targetGazeX = Random.nextFloat() * 0.56f - 0.28f
             targetGazeY = Random.nextFloat() * 0.36f - 0.18f
             nextMicroSaccadeMs = nowMs + Random.nextLong(1800L, 4200L)

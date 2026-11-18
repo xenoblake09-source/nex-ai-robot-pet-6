@@ -14,7 +14,7 @@ data class StoredTurn(
 
 /**
  * Privacy-first local storage for NEX 6.0 (Part L & Part M).
- * - Stores user's preferred name and bounded conversation context ONLY when permitted.
+ * - Stores user's preferred name, voluntary preferences, and bounded conversation context ONLY when permitted.
  * - Defaults to the clean NEX 6.0 HTTPS Render URL ([DEFAULT_NEX6_BACKEND_URL]) and allows
  *   secure HTTPS overrides via the external [com.nex.robotpet.v6.BackendSetupActivity].
  * - Never stores or accepts a Gemini API key on the phone.
@@ -29,7 +29,11 @@ class MemoryManager(context: Context) {
         set(value) {
             prefs.edit().putBoolean(KEY_MEMORY_ENABLED, value).apply()
             if (!value) {
-                prefs.edit().remove(KEY_USER_NAME).remove(KEY_HISTORY_JSON).apply()
+                prefs.edit()
+                    .remove(KEY_USER_NAME)
+                    .remove(KEY_USER_PREFERENCES)
+                    .remove(KEY_HISTORY_JSON)
+                    .apply()
             }
         }
 
@@ -53,10 +57,39 @@ class MemoryManager(context: Context) {
             }
         }
 
+    var userPreferences: String?
+        get() = if (isMemoryEnabled) prefs.getString(KEY_USER_PREFERENCES, null)?.takeIf { it.isNotBlank() } else null
+        set(value) {
+            if (!isMemoryEnabled) return
+            val cleaned = value?.trim()?.take(240)
+            if (cleaned.isNullOrBlank()) {
+                prefs.edit().remove(KEY_USER_PREFERENCES).apply()
+            } else {
+                prefs.edit().putString(KEY_USER_PREFERENCES, cleaned).apply()
+            }
+        }
+
+    fun rememberPreference(preferenceItem: String) {
+        if (!isMemoryEnabled) return
+        val item = preferenceItem.trim().take(80)
+        if (item.isBlank()) return
+        val existing = userPreferences
+            ?.split("; ")
+            ?.map { it.trim() }
+            ?.filter { it.isNotBlank() }
+            ?.toMutableList()
+            ?: mutableListOf()
+        if (existing.none { it.equals(item, ignoreCase = true) }) {
+            existing.add(item)
+        }
+        userPreferences = existing.takeLast(5).joinToString("; ")
+    }
+
     var backendBaseUrl: String
         get() {
             val saved = prefs.getString(KEY_BACKEND_URL, null)?.trim()
-            return if (!saved.isNullOrEmpty()) saved else DEFAULT_NEX6_BACKEND_URL
+            val normalized = validateHttpsBackendUrl(saved)
+            return normalized ?: DEFAULT_NEX6_BACKEND_URL
         }
         set(value) {
             val validated = validateHttpsBackendUrl(value)
@@ -136,7 +169,7 @@ class MemoryManager(context: Context) {
     }
 
     /**
-     * Complete privacy wipe of stored user memory (name, conversation history, custom eyes, game scores).
+     * Complete privacy wipe of stored user memory (name, preferences, conversation history, custom eyes, game scores).
      * Preserves backend URL override unless [includeBackendUrl] is true.
      */
     fun clearAllUserData(includeBackendUrl: Boolean = false) {
@@ -151,12 +184,14 @@ class MemoryManager(context: Context) {
 
     companion object {
         const val DEFAULT_NEX6_BACKEND_URL = "https://nex-ai-robot-pet-6-backend.onrender.com"
+        private const val LEGACY_NO_SERVER_TYPO_HOST = "nex-ai-robot-pet-6.onrender.com"
 
         private const val PREFS_NAME = "nex_v6_private_memory"
         private const val KEY_MEMORY_ENABLED = "memory_enabled"
         private const val KEY_WAKE_WORD_ENABLED = "wake_word_enabled"
         private const val KEY_AUTONOMOUS_IDLE = "autonomous_idle_enabled"
         private const val KEY_USER_NAME = "preferred_user_name"
+        private const val KEY_USER_PREFERENCES = "voluntary_user_preferences"
         private const val KEY_HISTORY_JSON = "conversation_history_json"
         private const val KEY_BACKEND_URL = "https_backend_base_url"
         private const val KEY_CUSTOM_COLOR = "custom_eye_color"
@@ -168,6 +203,8 @@ class MemoryManager(context: Context) {
         /**
          * Validates that [rawUrl] is a clean, secure HTTPS base URL with a real hostname,
          * no embedded userinfo/API keys, and no legacy NEX 5.0 references.
+         * Auto-corrects the common `nex-ai-robot-pet-6.onrender.com` (missing `-backend`) typo
+         * to the live deployed service `https://nex-ai-robot-pet-6-backend.onrender.com`.
          */
         fun validateHttpsBackendUrl(rawUrl: String?): String? {
             val trimmed = rawUrl?.trim()?.trimEnd('/') ?: return null
@@ -180,9 +217,14 @@ class MemoryManager(context: Context) {
             if (!"https".equals(uri.scheme, ignoreCase = true)) return null
             if (!uri.userInfo.isNullOrEmpty()) return null
             if (!uri.query.isNullOrEmpty() || !uri.fragment.isNullOrEmpty()) return null
-            val host = uri.host?.lowercase() ?: return null
-            if (host.isBlank() || !host.contains('.')) return null
-            if (host.contains("nex-5") || host.contains("nex5")) return null
+            val rawHost = uri.host?.lowercase() ?: return null
+            if (rawHost.isBlank() || !rawHost.contains('.')) return null
+            if (rawHost.contains("nex-5") || rawHost.contains("nex5")) return null
+            val host = if (rawHost == LEGACY_NO_SERVER_TYPO_HOST) {
+                "nex-ai-robot-pet-6-backend.onrender.com"
+            } else {
+                rawHost
+            }
             val portPart = if (uri.port != -1 && uri.port != 443) ":${uri.port}" else ""
             val cleanPath = (uri.path ?: "").trimEnd('/')
             return "https://$host$portPart$cleanPath"
